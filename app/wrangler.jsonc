@@ -13,6 +13,14 @@
     { "binding": "PHOTOS", "bucket_name": "riovv-media" }
   ],
   "vars": {
-    "R2_DEV_BASE": "https://riovv-media.<account>.r2.dev"
+    "R2_DEV_BASE": "https://riovv-media.<account>.r2.dev",
+    "ADMIN_HOST": "admin.riovv.com"
   }
+  // Secrets set in CF dashboard (do NOT commit here):
+  //   DATABASE_URL              -- Neon pooler URL with sslmode=require
+  //   GITHUB_OAUTH_CLIENT_ID
+  //   GITHUB_OAUTH_CLIENT_SECRET
+  //   ALLOWED_USERS             -- comma-separated github_logins
+  //   COOKIE_DOMAIN             -- "riovv.com" so cookies span admin + public
+  //   R2_PUBLIC_BASE            -- "https://media.riovv.com" (optional; falls back to R2_DEV_BASE)
 }

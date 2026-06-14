@@ -1,0 +1,152 @@
+---
+import type { Post } from '../lib/db/posts';
+
+interface Props {
+  mode: 'new' | 'edit';
+  siteId: string;
+  initial: Partial<Post> & { tagNames?: string[] };
+}
+const { mode, siteId, initial } = Astro.props;
+const today = new Date().toISOString().slice(0, 10);
+---
+<form id="post-form" data-mode={mode} data-site-id={siteId} data-post-id={initial.id ?? ''}>
+  <label style="display: block; margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">title</div>
+    <input name="title" required value={initial.title ?? ''} placeholder="post title" />
+  </label>
+
+  <label style="display: block; margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">slug</div>
+    <input name="slug" value={initial.slug ?? ''} placeholder="auto from title" />
+  </label>
+
+  <label style="display: block; margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">date</div>
+    <input name="date" type="date"
+      value={initial.publishedAt ? initial.publishedAt.toISOString().slice(0, 10) : today} />
+  </label>
+
+  <label style="display: block; margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">tags (comma-separated)</div>
+    <input name="tags" value={(initial.tagNames ?? []).join(', ')} placeholder="photography, leica" />
+  </label>
+
+  <div style="margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 6px;">body</div>
+    <div class="toolbar" style="display: flex; gap: 4px; padding: 6px; margin-bottom: 6px;
+        background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px;">
+      <label style="display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; cursor: pointer;">
+        <span>📷 photo</span>
+        <input id="image-picker" type="file" accept="image/*" multiple style="display: none;" />
+      </label>
+    </div>
+    <div id="image-status" style="font-size: 13px; color: var(--muted); margin: -2px 0 6px; min-height: 1.4em;"></div>
+    <textarea id="body-area" name="body" rows="14"
+      placeholder="write here…" style="min-height: 320px;">{initial.body ?? ''}</textarea>
+  </div>
+
+  <div class="save-bar">
+    <div>
+      {mode === 'edit' && <button type="button" class="danger" id="delete-btn">delete</button>}
+    </div>
+    <div class="right">
+      <button type="button" onclick="history.back()">cancel</button>
+      <button type="submit" class="primary" id="save-btn">save</button>
+    </div>
+  </div>
+</form>
+
+<script>
+  const form = document.getElementById('post-form') as HTMLFormElement;
+  const picker = document.getElementById('image-picker') as HTMLInputElement;
+  const status = document.getElementById('image-status') as HTMLElement;
+  const body = document.getElementById('body-area') as HTMLTextAreaElement;
+  const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
+  const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement | null;
+  const siteId = form.dataset.siteId!;
+  const postId = form.dataset.postId || null;
+  const mode = form.dataset.mode!;
+
+  function insertAtCursor(text: string) {
+    const at = body.selectionStart ?? body.value.length;
+    body.value = body.value.slice(0, at) + text + body.value.slice(at);
+    body.selectionStart = body.selectionEnd = at + text.length;
+    body.focus();
+  }
+
+  async function uploadImage(file: File) {
+    status.textContent = `compressing ${file.name}…`;
+    // Client-side compress to keep payload small. Max edge 1600, JPEG 0.85.
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const ratio = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * ratio);
+    const h = Math.round(bitmap.height * ratio);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.85));
+    if (!blob) { status.textContent = 'compress failed'; return null; }
+
+    const fd = new FormData();
+    fd.append('file', blob, file.name.replace(/\.[^.]+$/, '') + '.jpg');
+    fd.append('siteId', siteId);
+    fd.append('width', String(w));
+    fd.append('height', String(h));
+
+    status.textContent = `uploading ${(blob.size / 1024).toFixed(0)} KB…`;
+    const r = await fetch('/admin/api/upload', { method: 'POST', body: fd });
+    if (!r.ok) { status.textContent = `upload failed: ${await r.text()}`; return null; }
+    const { id, url } = await r.json() as { id: string; url: string };
+    return { id, url };
+  }
+
+  picker.addEventListener('change', async () => {
+    const files = Array.from(picker.files ?? []);
+    picker.value = '';
+    for (const file of files) {
+      const result = await uploadImage(file);
+      if (result) {
+        insertAtCursor(`\n![${file.name.replace(/\.[^.]+$/, '')}](image:${result.id})\n`);
+        status.textContent = `inserted ${result.url}`;
+      }
+    }
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    saveBtn.disabled = true; saveBtn.textContent = 'saving…';
+    const fd = new FormData(form);
+    const payload = {
+      mode, postId, siteId,
+      title: fd.get('title'),
+      slug: fd.get('slug') || undefined,
+      date: fd.get('date'),
+      body: fd.get('body') ?? '',
+      tagNames: String(fd.get('tags') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+    };
+    const r = await fetch('/admin/api/save', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      saveBtn.disabled = false; saveBtn.textContent = 'save';
+      alert('save failed: ' + await r.text());
+      return;
+    }
+    const { id } = await r.json() as { id: string };
+    location.href = `/admin/edit/${id}`;
+  });
+
+  deleteBtn?.addEventListener('click', async () => {
+    if (!postId) return;
+    if (!confirm('delete this post?')) return;
+    const r = await fetch('/admin/api/delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ postId, siteId }),
+    });
+    if (!r.ok) { alert('delete failed: ' + await r.text()); return; }
+    location.href = '/admin';
+  });
+</script>

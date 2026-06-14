@@ -1,0 +1,58 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import type { SqlDriver } from '../../lib/db/driver';
+
+const session = Astro.locals.session;
+if (!session) return Astro.redirect('/login');
+const driver = Astro.locals.db! as SqlDriver;
+
+// Admin queries are scoped to the user's sites via site_members.
+const sites = await driver.query<{
+  id: string; slug: string; name: string;
+}>(`
+  SELECT s.id, s.slug, s.name
+  FROM sites s JOIN site_members m ON m.site_id = s.id
+  WHERE m.user_id = $1
+  ORDER BY m.added_at ASC
+`, [session.userId]);
+const siteId = sites[0]?.id;
+
+const posts = siteId
+  ? await driver.query<{ id: string; slug: string; title: string; status: string; published_at: string | null; updated_at: string }>(
+      `SELECT id, slug, title, status, published_at, updated_at
+       FROM posts WHERE site_id = $1 ORDER BY updated_at DESC LIMIT 200`,
+      [siteId],
+    )
+  : [];
+---
+<AdminLayout title="posts">
+  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+    <h2 style="font-size: 18px; font-weight: 600;">{posts.length} posts</h2>
+    <a href="/admin/new" class="primary" role="button" style="
+      min-height: 44px; padding: 10px 16px;
+      background: #111; color: #fff; border-radius: 999px;
+      display: inline-flex; align-items: center;
+    ">+ new</a>
+  </div>
+
+  {sites.length === 0 ? (
+    <p style="color: var(--muted); padding: 40px 0; text-align: center;">
+      No sites associated with your account yet. Ask an admin to add you to a site.
+    </p>
+  ) : posts.length === 0 ? (
+    <p style="color: var(--muted); padding: 40px 0; text-align: center;">No posts yet. Start writing.</p>
+  ) : (
+    <ul style="list-style: none; padding: 0;">
+      {posts.map((p) => (
+        <li>
+          <a href={`/admin/edit/${p.id}`} style="display: block; padding: 14px 0; border-bottom: 1px solid var(--border);">
+            <div style="font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace;">
+              {p.published_at ? new Date(p.published_at).toISOString().slice(0, 10) : 'draft'} · {p.status}
+            </div>
+            <div style="font-size: 16px; margin-top: 2px;">{p.title}</div>
+          </a>
+        </li>
+      ))}
+    </ul>
+  )}
+</AdminLayout>

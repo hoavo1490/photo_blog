@@ -1,0 +1,61 @@
+import type { APIRoute } from 'astro';
+import * as posts from '../../../lib/db/posts';
+import * as tags from '../../../lib/db/tags';
+import { slugify } from '../../../lib/slug';
+import type { SqlDriver } from '../../../lib/db/driver';
+
+interface SaveBody {
+  mode: 'new' | 'edit';
+  postId: string | null;
+  siteId: string;
+  title: string;
+  slug?: string;
+  date?: string;
+  body: string;
+  tagNames: string[];
+}
+
+export const POST: APIRoute = async (ctx) => {
+  const session = ctx.locals.session;
+  if (!session) return new Response('unauthorized', { status: 401 });
+  const driver = ctx.locals.db! as SqlDriver;
+  const b = (await ctx.request.json()) as SaveBody;
+
+  // Verify the user is a member of the target site.
+  const member = await driver.query<{ role: string }>(
+    `SELECT role FROM site_members WHERE site_id = $1 AND user_id = $2`,
+    [b.siteId, session.userId],
+  );
+  if (member.length === 0) return new Response('forbidden', { status: 403 });
+
+  if (!b.title?.trim()) return new Response('title required', { status: 400 });
+
+  const slug = (b.slug && b.slug.trim()) || slugify(b.title);
+  if (!slug) return new Response('could not derive slug', { status: 400 });
+
+  let postId: string;
+  if (b.mode === 'new') {
+    const created = await posts.createDraft(driver, {
+      siteId: b.siteId, slug, title: b.title, body: b.body,
+    });
+    postId = created.id;
+  } else {
+    if (!b.postId) return new Response('postId required for edit', { status: 400 });
+    const updated = await posts.update(driver, {
+      siteId: b.siteId, id: b.postId, title: b.title, body: b.body,
+    });
+    if (!updated) return new Response('not found', { status: 404 });
+    postId = updated.id;
+  }
+
+  // Publish + set date (treat the form's date as published_at).
+  const publishedAt = b.date ? new Date(`${b.date}T12:00:00Z`) : undefined;
+  await posts.publish(driver, { siteId: b.siteId, id: postId, publishedAt });
+
+  // Replace tag set.
+  await tags.setPostTags(driver, { siteId: b.siteId, postId, tagNames: b.tagNames });
+
+  return new Response(JSON.stringify({ id: postId, slug }), {
+    headers: { 'content-type': 'application/json' },
+  });
+};

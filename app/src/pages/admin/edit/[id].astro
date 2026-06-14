@@ -1,0 +1,32 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import PostForm from '../../../components/PostForm.astro';
+import * as posts from '../../../lib/db/posts';
+import type { SqlDriver } from '../../../lib/db/driver';
+
+const session = Astro.locals.session;
+if (!session) return Astro.redirect('/login');
+const driver = Astro.locals.db! as SqlDriver;
+
+const sites = await driver.query<{ id: string }>(
+  `SELECT s.id FROM sites s JOIN site_members m ON m.site_id = s.id
+   WHERE m.user_id = $1 ORDER BY m.added_at ASC LIMIT 1`,
+  [session.userId],
+);
+if (sites.length === 0) return new Response('No sites', { status: 403 });
+const siteId = sites[0].id;
+const postId = Astro.params.id!;
+
+const post = await posts.findById(driver, { siteId, id: postId });
+if (!post) return new Response('Post not found', { status: 404 });
+
+const tagRows = await driver.query<{ name: string }>(
+  `SELECT t.name FROM tags t JOIN post_tags pt ON pt.tag_id = t.id
+   WHERE pt.post_id = $1 ORDER BY t.slug`,
+  [postId],
+);
+const tagNames = tagRows.map((r) => r.name);
+---
+<AdminLayout title={post.title || 'edit'}>
+  <PostForm mode="edit" siteId={siteId} initial={{ ...post, tagNames }} />
+</AdminLayout>

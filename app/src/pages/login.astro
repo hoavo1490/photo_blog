@@ -1,0 +1,27 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../layouts/AdminLayout.astro';
+import { createGitHubOAuth } from '../lib/auth/oauth';
+
+const e = env as unknown as { GITHUB_OAUTH_CLIENT_ID?: string; GITHUB_OAUTH_CLIENT_SECRET?: string };
+const oauth = createGitHubOAuth({
+  clientId: e.GITHUB_OAUTH_CLIENT_ID ?? '',
+  clientSecret: e.GITHUB_OAUTH_CLIENT_SECRET ?? '',
+});
+
+const next = Astro.url.searchParams.get('next') ?? '/admin';
+const state = btoa(JSON.stringify({ next, n: crypto.randomUUID() }));
+const callback = new URL('/auth/callback', Astro.url).toString();
+const target = oauth.authorizeUrl(state, callback);
+---
+<AdminLayout title="sign in">
+  <section style="padding: 40px 0; text-align: center;">
+    <h2 style="font-size: 22px; font-weight: 600; margin-bottom: 8px;">riovv editor</h2>
+    <p style="color: var(--muted); margin-bottom: 24px;">Sign in with GitHub to write.</p>
+    <a class="primary" href={target} role="button" style="
+      display: inline-flex; align-items: center; gap: 8px;
+      min-height: 44px; padding: 10px 18px;
+      background: #111; color: #fff; border-radius: 999px;
+    ">Continue with GitHub</a>
+  </section>
+</AdminLayout>
