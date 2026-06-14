@@ -42,7 +42,7 @@ function lerpColor(t: number): string {
           const size = (0.9 + w * 1.1).toFixed(2);   // 0.9em → 2.0em
           return (
             <a
-              href={`/tags/${encodeURIComponent(tag)}.html`}
+              href={`#${encodeURIComponent(tag)}`}
               title={`${tag} (${list.length})`}
               style={`color: ${lerpColor(w)}; font-size: ${size}em;`}
             >{tag}</a>

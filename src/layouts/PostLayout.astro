@@ -23,7 +23,7 @@ const dateStr = post.data.date.toISOString().slice(0, 10);
       {post.data.tags.length > 0 && (
         <span class="tags">
           {post.data.tags.map((tag) => (
-            <a href={`/tags/${encodeURIComponent(tag)}.html`} title={tag}>#{tag}</a>
+            <a href={`/tags.html#${encodeURIComponent(tag)}`} title={tag}>#{tag}</a>
           ))}
         </span>
       )}
