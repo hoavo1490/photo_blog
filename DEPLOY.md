@@ -1,7 +1,9 @@
 # Deploying riovv-app
 
 A one-Worker Astro 6 SSR deployment to Cloudflare. Public site and admin
-editor live in the same Worker; the middleware routes by hostname.
+editor live in the same Worker on the same domain; the middleware
+classifies by path -- `/admin/*` (plus `/login`, `/logout`, `/auth/*`)
+requires a session, everything else is public.
 
 ## Prerequisites
 
@@ -9,7 +11,7 @@ editor live in the same Worker; the middleware routes by hostname.
 - Neon account (Free tier is enough to start)
 - GitHub account with admin rights on the content repo
 - `psql` and `node` available locally
-- DNS for `riovv.com` and `admin.riovv.com` managed by Cloudflare (custom domains)
+- DNS for your tenant host (e.g. `riovv.com`) managed by Cloudflare
 
 ## 1. Create the Postgres database (Neon)
 
@@ -40,9 +42,13 @@ editor live in the same Worker; the middleware routes by hostname.
 
 1. https://github.com/settings/developers → New OAuth App
 2. Application name: `riovv editor`
-3. Homepage URL: `https://admin.riovv.com`
-4. Authorization callback URL: `https://admin.riovv.com/auth/callback`
+3. Homepage URL: `https://riovv.com` (or your workers.dev URL for testing)
+4. Authorization callback URL: `https://riovv.com/auth/callback`
 5. Copy Client ID + generate Client Secret
+
+If you don't have a custom domain yet, you can register against your
+`*.workers.dev` URL temporarily and re-register against the real domain
+when you have it.
 
 ## 4. Deploy the Worker
 
@@ -56,16 +62,15 @@ Connect this repo to Workers Builds via the dashboard:
    - Build command: `pnpm build`
    - Build output directory: `dist`
    - Root directory: `/` (repo root)
-5. Custom domains:
-   - Add `riovv.com`
-   - Add `admin.riovv.com`
+5. Custom domains (when you have one):
+   - Add the tenant host (e.g. `riovv.com`). The `/admin/*` paths on that
+     same host serve the editor.
 
 ### Environment variables (Settings → Variables and Secrets)
 
 Plain variables:
 
 ```
-ADMIN_HOST      = admin.riovv.com
 R2_DEV_BASE     = https://pub-<id>.r2.dev          (from R2 step above)
 R2_PUBLIC_BASE  = https://media.riovv.com          (optional, after custom domain set)
 ```
@@ -77,7 +82,7 @@ DATABASE_URL                = <Neon pooler URL with sslmode=require>
 GITHUB_OAUTH_CLIENT_ID      = <from step 3>
 GITHUB_OAUTH_CLIENT_SECRET  = <from step 3>
 ALLOWED_USERS               = hoavo1490
-COOKIE_DOMAIN               = riovv.com
+COOKIE_DOMAIN               = <leave blank on workers.dev; tenant host in prod>
 ```
 
 `COOKIE_DOMAIN=riovv.com` makes the session cookie valid on both
