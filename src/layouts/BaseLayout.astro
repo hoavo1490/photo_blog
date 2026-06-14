@@ -101,6 +101,10 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
         match the picked variant against srcset/sizes -- these MUST be
         identical to what the <img> ultimately renders, or the preload
         gets discarded and counts as wasted bytes. */}
+    {/* Single LCP preload. When a webp track exists, use type="image/webp"
+        so non-WebP browsers (~5%) skip it and fall through to the
+        <picture>'s JPEG <img>. Emitting both was downloading the LCP
+        image twice (webp + jpg) on every modern browser. */}
     {lcpImage && lcpImage.webpSrcset && (
       <link
         rel="preload"
@@ -111,7 +115,7 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
         fetchpriority="high"
       />
     )}
-    {lcpImage && (
+    {lcpImage && !lcpImage.webpSrcset && (
       <link
         rel="preload"
         as="image"
