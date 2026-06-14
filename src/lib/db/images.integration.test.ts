@@ -64,7 +64,20 @@ describe('images.create', () => {
         siteId: s2.id, r2Key: 'global-key',
         originalName: 'b.jpg', sizeBytes: 1, width: 1, height: 1, uploadedBy: uploaderId,
       }),
-    ).rejects.toThrow(/unique|duplicate/i);
+    ).rejects.toThrow(/different site|unique|duplicate/i);
+  });
+
+  it('is idempotent for the same site re-uploading the same r2_key', async () => {
+    const first = await images.create(driver, {
+      siteId, r2Key: 'idem-key',
+      originalName: 'photo.jpg', sizeBytes: 100, width: 200, height: 200, uploadedBy: uploaderId,
+    });
+    const second = await images.create(driver, {
+      siteId, r2Key: 'idem-key',
+      originalName: 'photo.jpg', sizeBytes: 100, width: 200, height: 200, uploadedBy: uploaderId,
+    });
+    expect(second.id).toBe(first.id);
+    expect(second.r2Key).toBe('idem-key');
   });
 });
 

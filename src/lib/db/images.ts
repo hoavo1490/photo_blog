@@ -58,9 +58,20 @@ export interface CreateImageInput {
 }
 
 export async function create(driver: SqlDriver, input: CreateImageInput): Promise<Image> {
+  // r2_key is content-addressed (siteId + day + content hash + filename),
+  // so the same image uploaded twice produces the same key. R2 PUT is
+  // idempotent; this INSERT must be too, or callers crash on retry or on
+  // re-uploading a photo they've used before.
+  //
+  // Idempotency is scoped to the SAME site: the ON CONFLICT only fires
+  // its DO UPDATE when the existing row already belongs to this site.
+  // A cross-site collision (same r2_key, different site) returns zero
+  // rows; we then raise so a tenant can't claim another tenant's image.
   const rows = await driver.query<ImageRow>(
     `INSERT INTO images (site_id, r2_key, original_name, size_bytes, width, height, uploaded_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (r2_key) DO UPDATE SET original_name = EXCLUDED.original_name
+       WHERE images.site_id = EXCLUDED.site_id
      RETURNING ${SELECT}`,
     [
       input.siteId,
@@ -72,6 +83,9 @@ export async function create(driver: SqlDriver, input: CreateImageInput): Promis
       input.uploadedBy,
     ],
   );
+  if (rows.length === 0) {
+    throw new Error(`r2_key ${input.r2Key} is already owned by a different site`);
+  }
   return fromRow(rows[0]);
 }
 
