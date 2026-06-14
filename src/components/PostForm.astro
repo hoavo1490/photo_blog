@@ -195,14 +195,14 @@ const initialCoverUrl = initial.coverUrl ?? '';
   // Widths larger than the original are skipped (no upscaling).
   const VARIANT_TARGETS = [400, 800, 1200, 1600];
 
-  async function resizeJpeg(bitmap: ImageBitmap, targetWidth: number, quality = 0.85): Promise<{ blob: Blob; width: number; height: number } | null> {
+  async function resizeAt(bitmap: ImageBitmap, targetWidth: number, type: string, quality = 0.85): Promise<{ blob: Blob; width: number; height: number } | null> {
     const ratio = Math.min(1, targetWidth / bitmap.width);
     const w = Math.round(bitmap.width * ratio);
     const h = Math.round(bitmap.height * ratio);
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', quality));
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, type, quality));
     return blob ? { blob, width: w, height: h } : null;
   }
 
@@ -210,24 +210,31 @@ const initialCoverUrl = initial.coverUrl ?? '';
     const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
 
     // Generate every target ≤ original width. The largest one becomes
-    // the primary; smaller ones are variants.
+    // the primary; smaller ones are variants. For each width we also
+    // produce a WebP variant -- ~30% smaller than JPEG at the same
+    // visual quality.
     const wantWidths = VARIANT_TARGETS.filter((w) => w <= bitmap.width);
-    if (wantWidths.length === 0) wantWidths.push(bitmap.width); // tiny source
-    const results = await Promise.all(wantWidths.map((w) => resizeJpeg(bitmap, w)));
-    const variants = results.filter((r): r is NonNullable<typeof r> => r !== null);
-    if (variants.length === 0) return null;
+    if (wantWidths.length === 0) wantWidths.push(bitmap.width);
+    const jpegResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/jpeg')));
+    const webpResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/webp')));
+    const jpegs = jpegResults.filter((r): r is NonNullable<typeof r> => r !== null);
+    if (jpegs.length === 0) return null;
+    const webps = webpResults.filter((r): r is NonNullable<typeof r> => r !== null);
 
-    // Sort largest first; primary is variants[0].
-    variants.sort((a, b) => b.width - a.width);
-    const primary = variants[0];
+    jpegs.sort((a, b) => b.width - a.width);
+    webps.sort((a, b) => b.width - a.width);
+    const primary = jpegs[0];
 
     const fd = new FormData();
     fd.append('siteId', siteId);
     fd.append('width', String(primary.width));
     fd.append('height', String(primary.height));
     const stem = file.name.replace(/\.[^.]+$/, '');
-    for (const v of variants) {
+    for (const v of jpegs) {
       fd.append(`file_${v.width}`, v.blob, `${stem}.${v.width}w.jpg`);
+    }
+    for (const v of webps) {
+      fd.append(`file_${v.width}_webp`, v.blob, `${stem}.${v.width}w.webp`);
     }
 
     const r = await fetch('/admin/api/upload', { method: 'POST', body: fd });

@@ -28,29 +28,44 @@ const { post, cover, description, priority = false, variantWidths = [], r2Key, r
 //   else     : 3 columns → 33vw inside a 750px max wrapper, so ~250px
 const sizesAttr = '(max-width: 480px) 100vw, (max-width: 800px) 50vw, 250px';
 
-const srcsetEntries: string[] = [];
+const jpegSrcset: string[] = [];
+const webpSrcset: string[] = [];
 if (r2Key && r2Env && variantWidths.length > 0) {
   for (const w of variantWidths) {
-    srcsetEntries.push(`${variantUrlForKey(r2Key, w, r2Env)} ${w}w`);
+    const jpeg = variantUrlForKey(r2Key, w, r2Env);
+    jpegSrcset.push(`${jpeg} ${w}w`);
+    webpSrcset.push(`${jpeg.replace(/\.jpg$/, '.webp')} ${w}w`);
   }
-  // Include the original (largest, addressed by the row's r2_key) at
-  // its actual rendered width if known. We don't know it here, so just
-  // add a high "w" descriptor so browsers fall back to it for hi-DPI
-  // wide viewports.
-  srcsetEntries.push(`${cover} 1600w`);
+  jpegSrcset.push(`${cover} 1600w`);
 }
-const srcset = srcsetEntries.length > 0 ? srcsetEntries.join(', ') : undefined;
+const jpegSrcsetStr = jpegSrcset.length > 0 ? jpegSrcset.join(', ') : undefined;
+const webpSrcsetStr = webpSrcset.length > 0 ? webpSrcset.join(', ') : undefined;
 ---
 <a class="card" href={postUrl({ publishedAt: post.publishedAt!, slug: post.slug })}>
-  <img
-    src={cover}
-    srcset={srcset}
-    sizes={srcset ? sizesAttr : undefined}
-    alt={post.title}
-    loading={priority ? 'eager' : 'lazy'}
-    decoding={priority ? 'sync' : 'async'}
-    fetchpriority={priority ? 'high' : 'auto'}
-  />
+  {webpSrcsetStr ? (
+    <picture>
+      <source type="image/webp" srcset={webpSrcsetStr} sizes={sizesAttr} />
+      <img
+        src={cover}
+        srcset={jpegSrcsetStr}
+        sizes={jpegSrcsetStr ? sizesAttr : undefined}
+        alt={post.title}
+        loading={priority ? 'eager' : 'lazy'}
+        decoding={priority ? 'sync' : 'async'}
+        fetchpriority={priority ? 'high' : 'auto'}
+      />
+    </picture>
+  ) : (
+    <img
+      src={cover}
+      srcset={jpegSrcsetStr}
+      sizes={jpegSrcsetStr ? sizesAttr : undefined}
+      alt={post.title}
+      loading={priority ? 'eager' : 'lazy'}
+      decoding={priority ? 'sync' : 'async'}
+      fetchpriority={priority ? 'high' : 'auto'}
+    />
+  )}
   <div class="overlay">
     <div class="title">{post.title}</div>
     <div class="desc">{description ?? post.description ?? ''}</div>

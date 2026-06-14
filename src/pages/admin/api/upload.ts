@@ -14,7 +14,7 @@ import type { R2Bucket } from '@cloudflare/workers-types';
 // it under `<key>.<W>w.jpg`. The DB records the list of generated widths
 // so renderers know what srcset entries to emit.
 
-interface VariantPart { width: number; file: File }
+interface VariantPart { width: number; file: File; format: 'jpeg' | 'webp' }
 
 export const POST: APIRoute = async (ctx) => {
   const session = ctx.locals.session;
@@ -33,23 +33,28 @@ export const POST: APIRoute = async (ctx) => {
   const height = Number(form.get('height') ?? 0);
   if (!siteId || !width || !height) return new Response('missing fields', { status: 400 });
 
-  // Collect file_<W> parts. Client always sends file_<largest> as the
-  // primary. We sort largest-first; the largest is the row's r2_key,
-  // smaller siblings are variants.
+  // Collect file_<W> (JPEG) and file_<W>_webp (WebP) parts. The JPEG
+  // primary (largest) keys the row; everything else lives next to it.
   const parts: VariantPart[] = [];
   for (const [k, v] of form.entries()) {
-    const m = /^file_(\d+)$/.exec(k);
-    if (m && v instanceof File) {
-      parts.push({ width: parseInt(m[1], 10), file: v });
+    const jpegM = /^file_(\d+)$/.exec(k);
+    const webpM = /^file_(\d+)_webp$/.exec(k);
+    if (jpegM && v instanceof File) {
+      parts.push({ width: parseInt(jpegM[1], 10), file: v, format: 'jpeg' });
+    } else if (webpM && v instanceof File) {
+      parts.push({ width: parseInt(webpM[1], 10), file: v, format: 'webp' });
     }
   }
-  // Back-compat: also accept the legacy `file` field (single-size upload).
   const legacy = form.get('file');
   if (legacy instanceof File && parts.length === 0) {
-    parts.push({ width, file: legacy });
+    parts.push({ width, file: legacy, format: 'jpeg' });
   }
   if (parts.length === 0) return new Response('no image files', { status: 400 });
-  parts.sort((a, b) => b.width - a.width);
+  // JPEGs first, largest-first, then WebPs. Primary = largest JPEG.
+  parts.sort((a, b) => {
+    if (a.format !== b.format) return a.format === 'jpeg' ? -1 : 1;
+    return b.width - a.width;
+  });
 
   const member = await driver.query<{ role: string }>(
     `SELECT role FROM site_members WHERE site_id = $1 AND user_id = $2`,
@@ -61,19 +66,28 @@ export const POST: APIRoute = async (ctx) => {
   const primaryBytes = new Uint8Array(await primary.file.arrayBuffer());
   const r2Key = await keyFor({ siteId, originalName: primary.file.name, bytes: primaryBytes });
 
-  // Upload primary + variants in parallel. Each variant lives at a
-  // derived key; the primary itself uses the canonical hash-based key.
-  await Promise.all(parts.map(async ({ width: w, file }, i) => {
-    const bytes = i === 0 ? primaryBytes : new Uint8Array(await file.arrayBuffer());
-    const key = i === 0 ? r2Key : variantKeyForKey(r2Key, w);
-    await e.PHOTOS.put(key, bytes, {
-      httpMetadata: { contentType: file.type || 'image/jpeg' },
-    });
+  // Upload primary + variants in parallel. The primary JPEG keeps the
+  // canonical key; JPEG variants use `<key>.<W>w.jpg`, WebP variants
+  // use `<key>.<W>w.webp` (same width).
+  await Promise.all(parts.map(async (p, i) => {
+    const bytes = i === 0 ? primaryBytes : new Uint8Array(await p.file.arrayBuffer());
+    let key: string;
+    if (i === 0) {
+      key = r2Key;
+    } else if (p.format === 'webp') {
+      key = variantKeyForKey(r2Key, p.width).replace(/\.jpg$/, '.webp');
+    } else {
+      key = variantKeyForKey(r2Key, p.width);
+    }
+    const contentType = p.format === 'webp' ? 'image/webp' : (p.file.type || 'image/jpeg');
+    await e.PHOTOS.put(key, bytes, { httpMetadata: { contentType } });
   }));
 
-  // Variant widths are all widths EXCEPT the primary's (which is the
-  // canonical r2_key, addressed via the row's original src).
-  const variantWidths = parts.slice(1).map((p) => p.width).sort((a, b) => a - b);
+  // Variant widths recorded for the JPEG track (PostCard derives WebP
+  // URLs by string substitution from the same set).
+  const variantWidths = [...new Set(
+    parts.filter((p, i) => i > 0 && p.format === 'jpeg').map((p) => p.width),
+  )].sort((a, b) => a - b);
 
   const image = await imagesRepo.create(driver, {
     siteId,

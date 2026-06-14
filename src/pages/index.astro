@@ -49,11 +49,21 @@ const lcpSrcset = latest && latest.r2Key && latest.variantWidths.length > 0
       `${latest.cover} 1600w`,
     ].join(', ')
   : undefined;
+const lcpWebpSrcset = latest && latest.r2Key && latest.variantWidths.length > 0
+  ? latest.variantWidths
+      .map((w) => `${variantUrlForKey(latest.r2Key!, w, env_).replace(/\.jpg$/, '.webp')} ${w}w`)
+      .join(', ')
+  : undefined;
 ---
 <BaseLayout
   description={latestDesc || undefined}
   image={latestCover}
-  lcpImage={latest ? { src: latest.cover, srcset: lcpSrcset, sizes: lcpSrcset ? lcpSizes : undefined } : undefined}
+  lcpImage={latest ? {
+    src: latest.cover,
+    srcset: lcpSrcset,
+    webpSrcset: lcpWebpSrcset,
+    sizes: lcpSrcset ? lcpSizes : undefined,
+  } : undefined}
 >
   <div class="home-wrap">
     <div id="gallery" class="gallery">

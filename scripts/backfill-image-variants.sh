@@ -50,13 +50,19 @@ while IFS=$'\t' read -r id key; do
       echo "  skip ${W}w (>= original)"
       continue
     fi
-    OUT="$TMPDIR_LOCAL/${W}.jpg"
-    sips --setProperty formatOptions 85 -s format jpeg --resampleWidth "$W" "$ORIG" --out "$OUT" >/dev/null
-    # Strip the trailing extension, append .${W}w.jpg
+    OUT_JPG="$TMPDIR_LOCAL/${W}.jpg"
+    OUT_WEBP="$TMPDIR_LOCAL/${W}.webp"
+    sips --setProperty formatOptions 85 -s format jpeg --resampleWidth "$W" "$ORIG" --out "$OUT_JPG" >/dev/null
+    # WebP at the same visual quality is ~30% smaller bytes.
+    cwebp -quiet -q 85 -resize "$W" 0 "$ORIG" -o "$OUT_WEBP"
+
     VARIANT_KEY="${key%.*}.${W}w.jpg"
-    echo "  upload $VARIANT_KEY ($(stat -f%z "$OUT") bytes)"
+    VARIANT_WEBP="${key%.*}.${W}w.webp"
+    echo "  upload $VARIANT_KEY ($(stat -f%z "$OUT_JPG") bytes)  +  $(stat -f%z "$OUT_WEBP") webp"
     pnpm exec wrangler r2 object put "${R2_BUCKET}/${VARIANT_KEY}" \
-      --file "$OUT" --content-type image/jpeg --remote >/dev/null 2>&1
+      --file "$OUT_JPG" --content-type image/jpeg --remote >/dev/null 2>&1
+    pnpm exec wrangler r2 object put "${R2_BUCKET}/${VARIANT_WEBP}" \
+      --file "$OUT_WEBP" --content-type image/webp --remote >/dev/null 2>&1
     GENERATED+=("$W")
   done
 

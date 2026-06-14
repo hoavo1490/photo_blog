@@ -28,9 +28,11 @@ interface Props {
   /** When set, emit <link rel="preload" as="image"> with srcset/sizes
    *  so the browser starts fetching the LCP image during head parsing
    *  instead of after body discovery. Pass src + srcset + sizes that
-   *  exactly match the <img> on the page for the picked variant to be
-   *  the same. */
-  lcpImage?: { src: string; srcset?: string; sizes?: string };
+   *  exactly match the <img>/<source> on the page for the picked
+   *  variant to be the same. `webpSrcset` adds a parallel preload for
+   *  the WebP track; browsers honor the one matching their accepted
+   *  media types. */
+  lcpImage?: { src: string; srcset?: string; sizes?: string; webpSrcset?: string };
 }
 
 const {
@@ -107,6 +109,16 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
         match the picked variant against srcset/sizes -- these MUST be
         identical to what the <img> ultimately renders, or the preload
         gets discarded and counts as wasted bytes. */}
+    {lcpImage && lcpImage.webpSrcset && (
+      <link
+        rel="preload"
+        as="image"
+        type="image/webp"
+        imagesrcset={lcpImage.webpSrcset}
+        imagesizes={lcpImage.sizes}
+        fetchpriority="high"
+      />
+    )}
     {lcpImage && (
       <link
         rel="preload"
