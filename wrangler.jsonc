@@ -11,20 +11,21 @@
   "observability": { "enabled": true },
   "r2_buckets": [
     { "binding": "PHOTOS", "bucket_name": "riovv-media" }
-  ],
-  "vars": {
-    "R2_DEV_BASE": "https://riovv-media.<account>.r2.dev"
-  }
+  ]
   // Path-based admin: /admin/* (and /login, /logout, /auth/*) require a
   // session; everything else is public. No ADMIN_HOST env needed.
   //
-  // Secrets set in CF dashboard (do NOT commit here):
-  //   DATABASE_URL              -- Neon pooler URL with sslmode=require
-  //   GITHUB_OAUTH_CLIENT_ID
-  //   GITHUB_OAUTH_CLIENT_SECRET
-  //   ALLOWED_USERS             -- comma-separated github_logins
-  //   COOKIE_DOMAIN             -- blank on workers.dev; the public host
-  //                                in production
-  //   R2_PUBLIC_BASE            -- "https://media.riovv.com" (optional;
-  //                                falls back to R2_DEV_BASE)
+  // All env set in CF dashboard -- do NOT add a "vars" block here, since
+  // wrangler config overwrites dashboard plaintext vars on every deploy
+  // (secrets survive, plaintext does not).
+  //
+  // Set in dashboard (Settings -> Variables and secrets):
+  //   DATABASE_URL              -- Secret. Neon pooler URL with sslmode=require
+  //   GITHUB_OAUTH_CLIENT_ID    -- Secret.
+  //   GITHUB_OAUTH_CLIENT_SECRET -- Secret.
+  //   ALLOWED_USERS             -- Plaintext. Comma-separated github_logins
+  //   COOKIE_DOMAIN             -- Plaintext. Blank on workers.dev;
+  //                                the public host in production
+  //   R2_DEV_BASE               -- Plaintext. e.g. https://pub-<id>.r2.dev
+  //   R2_PUBLIC_BASE            -- Plaintext. Optional; falls back to R2_DEV_BASE
 }
