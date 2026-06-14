@@ -104,7 +104,19 @@ export async function writeImage(
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, '0');
   const d = String(date.getUTCDate()).padStart(2, '0');
-  const path = `${t.mediaPath}/${y}/${m}/${d}/${filename}`;
+
+  // Append a short timestamp suffix so uploads never collide with existing
+  // files. Camera defaults (IMG_4521.jpg, screenshot.png) and shared author
+  // workflows in the future SaaS scenario make collisions otherwise common.
+  // GitHub's create-or-update API requires the existing file's sha for
+  // overwrites, and silent overwrite would break older posts referencing
+  // the same path. A unique path is the right invariant.
+  const stamp = Date.now().toString(36).slice(-5);
+  const ext = filename.match(/\.[^.]+$/)?.[0] ?? '';
+  const base = filename.replace(/\.[^.]+$/, '');
+  const stampedName = `${base}-${stamp}${ext}`;
+
+  const path = `${t.mediaPath}/${y}/${m}/${d}/${stampedName}`;
   const gh = client(token);
   await gh.repos.createOrUpdateFileContents({
     owner: t.owner,
