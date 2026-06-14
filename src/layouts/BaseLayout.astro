@@ -94,11 +94,21 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
     {/* Preconnect to the image origin (R2) so the TLS handshake happens
         in parallel with HTML parsing -- the LCP image lives here. */}
     {r2Origin && <link rel="preconnect" href={r2Origin} crossorigin />}
-    {/* Google Fonts: preconnect to both endpoints, &display=swap so
-        text isn't blocked on the font file. */}
+    {/* Google Fonts: preconnect + async CSS load. The media-print swap
+        makes the <link> non-blocking; the noscript fallback keeps it
+        working for users with JS disabled. display=swap renders text in
+        the fallback font until Ubuntu is ready. */}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Ubuntu:300&display=swap" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css?family=Ubuntu:300&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Ubuntu:300&display=swap" />
+    </noscript>
 
     {jsonLd && (
       <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
