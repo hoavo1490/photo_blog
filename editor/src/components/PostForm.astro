@@ -47,10 +47,32 @@ const rawBase = `https://raw.githubusercontent.com/${t.owner}/${t.repo}/${t.bran
     <input name="tags" value={initial.tags.join(', ')} placeholder="photography, leica" />
   </label>
 
-  <label style="display: block; margin-bottom: 14px;">
-    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">cover image (optional override)</div>
-    <input name="cover" value={initial.cover ?? ''} placeholder="/media/files/2026/06/14/foo.jpg" />
-  </label>
+  <div style="margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">
+      cover image (optional — defaults to the first photo in the body)
+    </div>
+    <div style="display: flex; gap: 8px; align-items: stretch;">
+      <input id="cover-input" name="cover" value={initial.cover ?? ''} placeholder="/media/files/2026/06/14/foo.jpg" style="flex: 1; min-width: 0;" />
+      <label class="cover-upload" title="upload cover photo" style="
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        min-height: 48px; min-width: 56px; padding: 0 14px;
+        border: 1px solid var(--border); border-radius: 8px;
+        background: var(--bg-elev); cursor: pointer;
+        font-weight: 500;
+        flex-shrink: 0;
+      ">
+        <span aria-hidden="true">📷</span>
+        <input id="cover-picker" type="file" accept="image/*" style="display: none;" />
+      </label>
+    </div>
+    <div id="cover-preview-wrap" style="margin-top: 8px; display: none;">
+      <img id="cover-preview" alt="cover preview" style="
+        max-width: 240px; max-height: 160px;
+        border: 1px solid var(--border); border-radius: 6px;
+        object-fit: cover;
+      " />
+    </div>
+  </div>
 
   <div style="margin-bottom: 14px;" data-raw-base={rawBase}>
     <div style="font-size: 13px; color: var(--muted); margin-bottom: 6px;">body</div>
@@ -205,6 +227,10 @@ const rawBase = `https://raw.githubusercontent.com/${t.owner}/${t.repo}/${t.bran
 
   const form = document.getElementById('post-form') as HTMLFormElement;
   const picker = document.getElementById('image-picker') as HTMLInputElement;
+  const coverPicker = document.getElementById('cover-picker') as HTMLInputElement;
+  const coverInput = document.getElementById('cover-input') as HTMLInputElement;
+  const coverPreviewWrap = document.getElementById('cover-preview-wrap') as HTMLElement;
+  const coverPreview = document.getElementById('cover-preview') as HTMLImageElement;
   const status = document.getElementById('image-status') as HTMLElement;
   const body = document.getElementById('body-area') as HTMLTextAreaElement;
   const writePane = document.getElementById('write-pane') as HTMLElement;
@@ -214,6 +240,27 @@ const rawBase = `https://raw.githubusercontent.com/${t.owner}/${t.repo}/${t.bran
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
   const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement | null;
   const rawBase = (previewPane.parentElement as HTMLElement).dataset.rawBase ?? '';
+
+  // -------- Cover preview --------
+  function displayUrl(path: string): string {
+    if (!path) return '';
+    if (/^https?:\/\//i.test(path)) return path;
+    if (path.startsWith('//')) return path;
+    if (path.startsWith('/') && rawBase) return rawBase + path;
+    return path;
+  }
+  function refreshCoverPreview() {
+    const v = coverInput.value.trim();
+    if (!v) {
+      coverPreviewWrap.style.display = 'none';
+      coverPreview.src = '';
+      return;
+    }
+    coverPreview.src = displayUrl(v);
+    coverPreviewWrap.style.display = '';
+  }
+  coverInput.addEventListener('input', refreshCoverPreview);
+  refreshCoverPreview();
 
   // Track IME composition so we don't process pastes mid-composition.
   let isComposing = false;
@@ -332,35 +379,27 @@ const rawBase = `https://raw.githubusercontent.com/${t.owner}/${t.repo}/${t.bran
     body.selectionStart = body.selectionEnd = cursor;
   }
 
-  async function handleFile(file: File) {
+  /** Compress + upload an image. Returns the served URL or null on failure. */
+  async function uploadImage(file: File): Promise<string | null> {
     if (!file.type.startsWith('image/')) {
       status.textContent = `not an image: ${file.type || 'unknown'}`;
-      return;
+      return null;
     }
-
-    const placeholder = `\n![uploading ${file.name}…](#uploading)\n`;
-    insertAtCursor(placeholder);
-    const placeholderStart = body.value.indexOf(placeholder);
     status.textContent = `compressing ${file.name} (${formatBytes(file.size)})…`;
-
     let compressed;
     try {
       compressed = await compressImage(file, { maxEdge: 1600, quality: 0.85 });
     } catch (e: any) {
-      replacePlaceholder(placeholder, placeholderStart, '');
       status.textContent = `compress failed: ${e.message ?? e}`;
-      return;
+      return null;
     }
-
     const savings = file.size > 0
       ? Math.round(100 - (compressed.compressedSize / file.size) * 100)
       : 0;
     status.textContent =
       `uploading ${formatBytes(file.size)} → ${formatBytes(compressed.compressedSize)} (-${savings}%)…`;
-
     const filename = filenameFromOriginal(file.name, compressed.blob);
     const base64 = await blobToBase64(compressed.blob);
-
     try {
       const r = await fetch('/api/upload', {
         method: 'POST',
@@ -369,26 +408,55 @@ const rawBase = `https://raw.githubusercontent.com/${t.owner}/${t.repo}/${t.bran
       });
       if (!r.ok) throw new Error(await r.text());
       const { url } = await r.json();
-      const alt = file.name.replace(/\.[^.]+$/, '');
-      const finalMarkdown = `\n![${alt}](${url})\n`;
-      replacePlaceholder(placeholder, placeholderStart, finalMarkdown);
-      status.textContent = `inserted ${url} (${formatBytes(compressed.compressedSize)})`;
+      status.textContent = `uploaded ${url} (${formatBytes(compressed.compressedSize)})`;
+      return url as string;
     } catch (e: any) {
-      replacePlaceholder(placeholder, placeholderStart, '');
       status.textContent = `upload failed: ${e.message ?? e}`;
+      return null;
     }
   }
 
-  async function handlePicker(input: HTMLInputElement) {
+  async function handleFileForBody(file: File) {
+    const placeholder = `\n![uploading ${file.name}…](#uploading)\n`;
+    insertAtCursor(placeholder);
+    const placeholderStart = body.value.indexOf(placeholder);
+    const url = await uploadImage(file);
+    if (!url) {
+      replacePlaceholder(placeholder, placeholderStart, '');
+      return;
+    }
+    const alt = file.name.replace(/\.[^.]+$/, '');
+    const finalMarkdown = `\n![${alt}](${url})\n`;
+    replacePlaceholder(placeholder, placeholderStart, finalMarkdown);
+    status.textContent = `inserted ${url}`;
+  }
+
+  async function handleFileForCover(file: File) {
+    const url = await uploadImage(file);
+    if (!url) return;
+    coverInput.value = url;
+    refreshCoverPreview();
+    status.textContent = `cover set: ${url}`;
+  }
+
+  async function handleBodyPicker(input: HTMLInputElement) {
     const files = Array.from(input.files ?? []);
     input.value = '';
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (files.length > 1) status.textContent = `(${i + 1}/${files.length}) preparing ${file.name}…`;
-      await handleFile(file);
+      await handleFileForBody(file);
     }
   }
-  picker?.addEventListener('change', () => handlePicker(picker));
+
+  async function handleCoverPicker(input: HTMLInputElement) {
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) await handleFileForCover(file);
+  }
+
+  picker?.addEventListener('change', () => handleBodyPicker(picker));
+  coverPicker?.addEventListener('change', () => handleCoverPicker(coverPicker));
 
   body.addEventListener('paste', (e) => {
     if (isComposing) return;
@@ -399,7 +467,7 @@ const rawBase = `https://raw.githubusercontent.com/${t.owner}/${t.repo}/${t.bran
         const file = it.getAsFile();
         if (file) {
           e.preventDefault();
-          handleFile(file);
+          handleFileForBody(file);
           return;
         }
       }
@@ -415,7 +483,7 @@ const rawBase = `https://raw.githubusercontent.com/${t.owner}/${t.repo}/${t.bran
     e.preventDefault();
     for (const f of files) {
       if (f.type.startsWith('image/')) {
-        handleFile(f);
+        handleFileForBody(f);
         break;
       }
     }
