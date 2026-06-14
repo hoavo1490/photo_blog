@@ -96,15 +96,12 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="alternate" type="application/rss+xml" title={siteName} href="/atom.xml" />
 
-    {/* LCP preload: start fetching the largest contentful image during
-        head parsing instead of after the body is discovered. Browsers
-        match the picked variant against srcset/sizes -- these MUST be
-        identical to what the <img> ultimately renders, or the preload
-        gets discarded and counts as wasted bytes. */}
-    {/* LCP preload, type-filtered so each browser only fetches the
-        format it'll actually use (no double-downloads). Order matches
-        the <picture> source order: AVIF for browsers that speak it,
-        WebP otherwise, JPEG only when neither is available. */}
+    {/* LCP preload: ONE preload, matching what the modal browser will
+        pick. Modern browsers that support AVIF also support WebP, so
+        emitting both made them download both -- ~95KB of dead weight
+        in the LCP window. Pick the smallest format we have; older
+        browsers without that format don't preload but still render
+        correctly via the <picture> chain in the body. */}
     {lcpImage && lcpImage.avifSrcset && (
       <link
         rel="preload"
@@ -115,7 +112,7 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
         fetchpriority="high"
       />
     )}
-    {lcpImage && lcpImage.webpSrcset && (
+    {lcpImage && !lcpImage.avifSrcset && lcpImage.webpSrcset && (
       <link
         rel="preload"
         as="image"
