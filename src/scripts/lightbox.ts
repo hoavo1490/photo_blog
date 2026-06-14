@@ -6,25 +6,30 @@ if (root) {
   const images = root.querySelectorAll<HTMLImageElement>('img');
   if (images.length) {
     images.forEach((img) => {
-      if (img.closest('a')) return;
-      const a = document.createElement('a');
       const src = img.currentSrc || img.src;
-      a.href = src;
-      a.setAttribute('data-pswp-src', src);
-      a.target = '_blank';
-      a.rel = 'noopener';
+      let a = img.closest<HTMLAnchorElement>('a');
+      if (a) {
+        // Image is already wrapped in <a> (e.g. markdown `[![alt](img)](url)`).
+        // Override the link so click opens the lightbox instead of leaving the page.
+        a.setAttribute('data-pswp-src', src);
+        a.href = src;
+        a.removeAttribute('target');
+      } else {
+        a = document.createElement('a');
+        a.href = src;
+        a.setAttribute('data-pswp-src', src);
+        img.parentNode?.insertBefore(a, img);
+        a.appendChild(img);
+      }
 
       const setSize = () => {
         if (img.naturalWidth && img.naturalHeight) {
-          a.setAttribute('data-pswp-width', String(img.naturalWidth));
-          a.setAttribute('data-pswp-height', String(img.naturalHeight));
+          a!.setAttribute('data-pswp-width', String(img.naturalWidth));
+          a!.setAttribute('data-pswp-height', String(img.naturalHeight));
         }
       };
       if (img.complete) setSize();
       else img.addEventListener('load', setSize, { once: true });
-
-      img.parentNode?.insertBefore(a, img);
-      a.appendChild(img);
     });
 
     const lightbox = new PhotoSwipeLightbox({
