@@ -100,7 +100,7 @@ article {
     .tags a { color: #999999; padding: .25em; &:hover { color: #dd1144; } }
   }
 
-  .post { img { max-width: 100%; display: block; margin: .5em auto; } }
+  .post { img { max-width: 100%; height: auto; display: block; margin: .5em auto; } }
 
   .divider {
     margin: 2em 0;
