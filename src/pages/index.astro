@@ -1,14 +1,48 @@
 ---
-// Placeholder so `astro build` has at least one page during Phase 1.
-// Real public homepage lands in Phase 6 (SSR from DB).
+import { env } from 'cloudflare:workers';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostCard from '../components/PostCard.astro';
+import * as posts from '../lib/db/posts';
+import { coverUrlFor } from '../lib/render';
+import { firstParagraph } from '../lib/markdown';
+
+const tenant = Astro.locals.tenant!;
+const driver = Astro.locals.db!;
+const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
+
+const all = await posts.listPublished(driver, { siteId: tenant.id, limit: 200 });
+
+type Card = { post: typeof all[number]; cover: string; desc: string };
+const cards: Card[] = [];
+for (const p of all) {
+  const cover = await coverUrlFor(driver, p, env_);
+  if (!cover) continue;
+  const desc = p.description ?? firstParagraph(p.body) ?? '';
+  cards.push({ post: p, cover, desc });
+}
+
+const byYear = new Map<number, Card[]>();
+for (const c of cards) {
+  const y = c.post.publishedAt!.getUTCFullYear();
+  const list = byYear.get(y) ?? [];
+  list.push(c);
+  byYear.set(y, list);
+}
+const years = [...byYear.entries()].sort((a, b) => b[0] - a[0]);
 ---
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>riovv</title>
-  </head>
-  <body>
-    <p>riovv — under construction.</p>
-  </body>
-</html>
+<BaseLayout>
+  <div class="home-wrap">
+    <div id="gallery" class="gallery">
+      {years.map(([year, list]) => (
+        <section class="year-section" data-year={year}>
+          <div class="section-header-wrapper">
+            <div class="section-title">{year}</div>
+          </div>
+          <div class="section-images">
+            {list.map((c) => <PostCard post={c.post} cover={c.cover} description={c.desc} />)}
+          </div>
+        </section>
+      ))}
+    </div>
+  </div>
+</BaseLayout>
