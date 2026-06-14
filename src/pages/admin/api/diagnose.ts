@@ -8,7 +8,7 @@ import { env } from 'cloudflare:workers';
 export const GET: APIRoute = async (ctx) => {
   const session = ctx.locals.session;
   if (!session) return new Response('unauthorized', { status: 401 });
-  const e = env as Record<string, unknown>;
+  const e = env as unknown as Record<string, unknown>;
   const photos = e.PHOTOS as unknown as R2Bucket | undefined;
   const out: Record<string, unknown> = {
     has_PHOTOS: !!photos,

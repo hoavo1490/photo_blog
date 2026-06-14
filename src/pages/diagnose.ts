@@ -6,7 +6,7 @@ import { env } from 'cloudflare:workers';
 // the uploads are fixed.
 
 export const GET: APIRoute = async () => {
-  const e = env as Record<string, unknown>;
+  const e = env as unknown as Record<string, unknown>;
   const photos = e.PHOTOS as unknown as R2Bucket | undefined;
   const out: Record<string, unknown> = {
     has_PHOTOS: !!photos,

@@ -114,19 +114,17 @@ export function variantUrlForKey(
   return publicUrlForKey(variantKeyForKey(key, width), env);
 }
 
-/** Public URL for a stored key. Prefers R2_PUBLIC_BASE (custom domain),
- *  falls back to R2_DEV_BASE for local dev / *.r2.dev. */
+/** Public URL for a stored key. Images are served through the Worker
+ *  at `/img/<key>` -- the PHOTOS R2 binding is the single source of
+ *  truth, and routing through the Worker lets us set proper cache
+ *  headers (R2's *.r2.dev URLs don't allow custom headers). The env
+ *  parameter is kept for back-compat with callers that haven't been
+ *  updated, but is no longer consulted. */
 export function publicUrlForKey(
   key: string,
-  env: { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string },
+  _env?: { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string },
 ): string {
-  const base = env.R2_PUBLIC_BASE ?? env.R2_DEV_BASE;
-  if (!base) {
-    throw new Error('publicUrlForKey: neither R2_PUBLIC_BASE nor R2_DEV_BASE is set');
-  }
-  // Strip a single trailing slash so we don't produce `//`.
-  const trimmed = base.endsWith('/') ? base.slice(0, -1) : base;
-  return `${trimmed}/${key}`;
+  return `/img/${key}`;
 }
 
 /** Remove an image. R2 `delete` is already a no-op for missing keys, so

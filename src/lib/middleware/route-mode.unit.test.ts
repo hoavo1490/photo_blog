@@ -37,6 +37,11 @@ describe('classifyRoute', () => {
     expect(classifyRoute({ pathname: '/favicon.ico' })).toBe('asset');
   });
 
+  it('returns asset for /img/<key> so middleware skips DB + cache wrap', () => {
+    expect(classifyRoute({ pathname: '/img/site/2026/06/14/foo.jpg' })).toBe('asset');
+    expect(classifyRoute({ pathname: '/img/foo.400w.webp' })).toBe('asset');
+  });
+
   it('routes /robots.txt as public-tenant (dynamic endpoint)', () => {
     expect(classifyRoute({ pathname: '/robots.txt' })).toBe('public-tenant');
   });

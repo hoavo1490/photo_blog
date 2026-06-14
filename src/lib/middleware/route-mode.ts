@@ -19,7 +19,10 @@ export interface ClassifyInput {
 // /_astro/* and a handful of root files.
 // /robots.txt is generated dynamically from a route, so it's NOT in here
 // -- only build-time static files served from the ASSETS binding belong.
-const STATIC_PREFIXES = ['/_astro/', '/_image/', '/favicon.ico'];
+// /img/* is a Worker-served image proxy with its own cache headers; it
+// has no use for tenant resolution or DB drivers, so it skips the
+// middleware pipeline like an asset.
+const STATIC_PREFIXES = ['/_astro/', '/_image/', '/favicon.ico', '/img/'];
 
 // Path prefixes that put a request into the admin branch. Every admin route
 // either lives under /admin/* or is part of the auth flow.

@@ -1,12 +1,8 @@
 ---
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
-import { env } from 'cloudflare:workers';
 import { defaultSiteName, defaultAuthor } from '../data/nav';
 import '../styles/global.scss';
-
-const r2Env = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
-const r2Origin = (r2Env.R2_PUBLIC_BASE ?? r2Env.R2_DEV_BASE ?? '').replace(/\/$/, '');
 
 // SEO meta is centralized here so per-page props translate cleanly into
 // title, description, canonical, Open Graph, Twitter, and (optionally)
@@ -99,10 +95,6 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
 
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="alternate" type="application/rss+xml" title={siteName} href="/atom.xml" />
-
-    {/* Preconnect to the image origin (R2) so the TLS handshake happens
-        in parallel with HTML parsing -- the LCP image lives here. */}
-    {r2Origin && <link rel="preconnect" href={r2Origin} crossorigin />}
 
     {/* LCP preload: start fetching the largest contentful image during
         head parsing instead of after the body is discovered. Browsers
