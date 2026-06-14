@@ -79,18 +79,70 @@ export function firstParagraph(body: string, maxChars = 200): string | null {
   return lastSpace > 0 ? slice.slice(0, lastSpace) : slice;
 }
 
-export interface ImageResolver {
-  (imageId: string): { url: string; alt?: string; width?: number; height?: number } | null;
+export interface ResolvedImage {
+  url: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+  /** Available responsive widths for srcset. Empty = no variants
+   *  (legacy image); fall back to a plain ![alt](url). */
+  variantWidths?: number[];
+  /** When variantWidths is non-empty, the helper substitutes the
+   *  url's extension to build `.<W>w.jpg` and `.<W>w.webp` URLs. */
+  variantUrlBase?: string;
 }
 
-/** Replace `![alt](image:<uuid>)` tokens with `![alt](resolved-url)`.
- *  Real URLs pass through untouched. Unresolved tokens are left as-is so
- *  the caller can decide whether to log or surface them. */
+export interface ImageResolver {
+  (imageId: string): ResolvedImage | null;
+}
+
+/** Body image sizes attribute. The post detail page sits inside the
+ *  750px page mixin, so on desktop the image is up to ~750px wide; on
+ *  mobile it fills the viewport. */
+const BODY_IMAGE_SIZES = '(max-width: 800px) 100vw, 750px';
+
+function buildPictureHtml(resolved: ResolvedImage, alt: string): string {
+  const widths = resolved.variantWidths ?? [];
+  const base = resolved.variantUrlBase;
+  if (widths.length === 0 || !base) {
+    // No variants: a plain <img> with whatever dimensions the resolver
+    // could give us. Width/height let the browser reserve layout and
+    // avoid CLS.
+    const dim = resolved.width && resolved.height
+      ? ` width="${resolved.width}" height="${resolved.height}"`
+      : '';
+    return `<img src="${resolved.url}" alt="${escapeAttr(alt)}"${dim} data-pswp-src="${resolved.url}" />`;
+  }
+
+  // Strip .jpg from the base; variants are `<base>.<W>w.jpg` and
+  // `<base>.<W>w.webp`.
+  const stripped = base.replace(/\.(jpe?g|png|webp|gif)$/i, '');
+  const jpegSet = widths.map((w) => `${stripped}.${w}w.jpg ${w}w`).join(', ');
+  const webpSet = widths.map((w) => `${stripped}.${w}w.webp ${w}w`).join(', ');
+  const dim = resolved.width && resolved.height
+    ? ` width="${resolved.width}" height="${resolved.height}"`
+    : '';
+  return [
+    '<picture>',
+    `<source type="image/webp" srcset="${webpSet}" sizes="${BODY_IMAGE_SIZES}" />`,
+    `<img src="${resolved.url}" srcset="${jpegSet}, ${resolved.url} 1600w" sizes="${BODY_IMAGE_SIZES}" alt="${escapeAttr(alt)}"${dim} decoding="async" data-pswp-src="${resolved.url}" />`,
+    '</picture>',
+  ].join('');
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+/** Replace `![alt](image:<uuid>)` tokens with a responsive <picture>
+ *  block (when variants exist) or a plain markdown image (when they
+ *  don't). The resulting HTML is passed through marked unchanged.
+ *  Unresolved tokens stay as-is. */
 export function rewriteImageTokens(body: string, resolve: ImageResolver): string {
   return body.replace(IMAGE_TOKEN_RE, (whole, alt: string, id: string) => {
     const resolved = resolve(id);
     if (!resolved) return whole;
     const finalAlt = alt || resolved.alt || '';
-    return `![${finalAlt}](${resolved.url})`;
+    return buildPictureHtml(resolved, finalAlt);
   });
 }

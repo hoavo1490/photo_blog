@@ -97,21 +97,24 @@ describe('rewriteImageTokens', () => {
   const resolver = (id: string) =>
     id === UUID_A ? { url: 'https://cdn/a.jpg' } : null;
 
-  it('replaces a single token with the resolved URL', () => {
+  it('emits an <img> tag pointing at the resolved URL', () => {
     const out = rewriteImageTokens(`![cover](image:${UUID_A})`, resolver);
-    expect(out).toBe('![cover](https://cdn/a.jpg)');
+    expect(out).toContain('<img');
+    expect(out).toContain('src="https://cdn/a.jpg"');
+    expect(out).toContain('alt="cover"');
+    expect(out).toContain('data-pswp-src="https://cdn/a.jpg"');
   });
 
   it('preserves alt text', () => {
     const out = rewriteImageTokens(`![hello world](image:${UUID_A})`, resolver);
-    expect(out).toContain('![hello world](https://cdn/a.jpg)');
+    expect(out).toContain('alt="hello world"');
   });
 
   it('falls back to resolver alt when no inline alt is provided', () => {
     const out = rewriteImageTokens(`![](image:${UUID_A})`, (id) =>
       id === UUID_A ? { url: 'https://cdn/a.jpg', alt: 'fallback' } : null,
     );
-    expect(out).toBe('![fallback](https://cdn/a.jpg)');
+    expect(out).toContain('alt="fallback"');
   });
 
   it('leaves real http URLs untouched', () => {
@@ -129,12 +132,35 @@ describe('rewriteImageTokens', () => {
       `pre ![a](image:${UUID_A}) mid ![b](image:${UUID_A}) post`,
       resolver,
     );
-    expect(out).toBe('pre ![a](https://cdn/a.jpg) mid ![b](https://cdn/a.jpg) post');
+    expect(out.match(/<img/g)?.length).toBe(2);
+    expect(out).toContain('alt="a"');
+    expect(out).toContain('alt="b"');
+    expect(out).toMatch(/^pre /);
+    expect(out).toMatch(/ post$/);
   });
 
-  it('handles tokens at the start and end of the body', () => {
-    const body = `![s](image:${UUID_A})\n\nmiddle\n\n![e](image:${UUID_A})`;
-    const out = rewriteImageTokens(body, resolver);
-    expect(out).toBe(`![s](https://cdn/a.jpg)\n\nmiddle\n\n![e](https://cdn/a.jpg)`);
+  it('emits a <picture> with srcset when variants are provided', () => {
+    const out = rewriteImageTokens(`![pic](image:${UUID_A})`, (id) =>
+      id === UUID_A
+        ? {
+            url: 'https://cdn/a.jpg',
+            variantWidths: [400, 800],
+            variantUrlBase: 'https://cdn/a.jpg',
+            width: 1600,
+            height: 1200,
+          }
+        : null,
+    );
+    expect(out).toContain('<picture>');
+    expect(out).toContain('type="image/webp"');
+    expect(out).toContain('https://cdn/a.400w.webp 400w');
+    expect(out).toContain('https://cdn/a.800w.jpg 800w');
+    expect(out).toContain('width="1600"');
+    expect(out).toContain('height="1200"');
+  });
+
+  it('escapes alt text into HTML attributes', () => {
+    const out = rewriteImageTokens(`![he said "hi" & <ok>](image:${UUID_A})`, resolver);
+    expect(out).toContain('alt="he said &quot;hi&quot; &amp; &lt;ok>"');
   });
 });

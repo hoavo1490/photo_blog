@@ -6,7 +6,7 @@
 import type { SqlDriver } from './db/driver';
 import type { Image } from './db/images';
 import type { Post } from './db/posts';
-import { rewriteImageTokens, type ImageResolver, firstImageUrl, firstImageToken } from './markdown';
+import { rewriteImageTokens, type ImageResolver, type ResolvedImage, firstImageUrl, firstImageToken } from './markdown';
 import { publicUrlForKey } from './r2/images';
 
 export interface RenderEnv {
@@ -30,19 +30,23 @@ export async function buildImageResolver(
   const placeholders = imageIds.map((_, i) => `$${i + 2}`).join(',');
   const rows = await driver.query<{
     id: string; r2_key: string; original_name: string; width: number; height: number;
+    variant_widths: number[] | null;
   }>(
-    `SELECT id, r2_key, original_name, width, height
+    `SELECT id, r2_key, original_name, width, height, variant_widths
      FROM images
      WHERE site_id = $1 AND id IN (${placeholders})`,
     [siteId, ...imageIds],
   );
-  const map = new Map<string, { url: string; width: number; height: number; alt: string }>();
+  const map = new Map<string, ResolvedImage>();
   for (const r of rows) {
+    const url = publicUrlForKey(r.r2_key, env);
     map.set(r.id, {
-      url: publicUrlForKey(r.r2_key, env),
+      url,
       width: r.width,
       height: r.height,
       alt: r.original_name,
+      variantWidths: (r.variant_widths ?? []).map((n) => typeof n === 'string' ? parseInt(n, 10) : n),
+      variantUrlBase: url,
     });
   }
   return (id) => map.get(id) ?? null;

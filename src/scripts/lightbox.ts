@@ -7,20 +7,32 @@ if (root) {
   const images = root.querySelectorAll<HTMLImageElement>('img');
   if (images.length) {
     images.forEach((img) => {
-      const src = img.currentSrc || img.src;
-      let a = img.closest<HTMLAnchorElement>('a');
+      // Prefer the original-resolution URL set by the markdown rewriter;
+      // otherwise fall back to whatever variant the browser picked.
+      const fullSrc = img.dataset.pswpSrc || img.currentSrc || img.src;
+
+      // If the img sits inside a <picture>, wrap the picture (not the
+      // img) so the lightbox anchor doesn't end up as an invalid child
+      // of <picture>. Otherwise wrap the img directly.
+      const picture = img.parentElement?.tagName === 'PICTURE'
+        ? (img.parentElement as HTMLElement)
+        : null;
+      const target = picture ?? img;
+
+      let a = target.closest<HTMLAnchorElement>('a');
+      if (a && a !== target.parentElement) a = null; // unrelated outer anchor
       if (a) {
-        // Image already wrapped in <a> (markdown `[![alt](img)](url)`).
-        // Override the link so click opens the lightbox instead of leaving the page.
-        a.setAttribute('data-pswp-src', src);
-        a.href = src;
+        // Existing wrapper (markdown `[![alt](img)](url)`): override href
+        // so click opens the lightbox.
+        a.setAttribute('data-pswp-src', fullSrc);
+        a.href = fullSrc;
         a.removeAttribute('target');
       } else {
         a = document.createElement('a');
-        a.href = src;
-        a.setAttribute('data-pswp-src', src);
-        img.parentNode?.insertBefore(a, img);
-        a.appendChild(img);
+        a.href = fullSrc;
+        a.setAttribute('data-pswp-src', fullSrc);
+        target.parentNode?.insertBefore(a, target);
+        a.appendChild(target);
       }
 
       const setSize = () => {
