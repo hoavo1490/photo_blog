@@ -76,18 +76,45 @@ const guid = initial.guid ?? newGuid();
     "></div>
   </div>
 
-  <label style="display: block; margin-bottom: 14px;">
-    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">
-      body (markdown) — paste or drop an image to insert
+  <div style="margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 6px;">body</div>
+
+    <div class="editor-tabs" role="tablist" style="
+      display: flex; gap: 4px; margin-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    ">
+      <button type="button" class="tab active" data-tab="write" role="tab">write</button>
+      <button type="button" class="tab" data-tab="preview" role="tab">preview</button>
     </div>
-    <textarea
-      id="body-area"
-      name="body"
-      rows="14"
-      placeholder="write here…"
-      style="min-height: 320px;"
-    >{initial.body}</textarea>
-  </label>
+
+    <div id="write-pane">
+      <div class="toolbar" role="toolbar" aria-label="format" style="
+        display: flex; flex-wrap: wrap; gap: 4px;
+        padding: 6px; margin-bottom: 6px;
+        background: var(--bg-elev);
+        border: 1px solid var(--border); border-radius: 8px;
+      ">
+        <button type="button" class="tb" data-cmd="bold" title="bold (⌘B)"><b>B</b></button>
+        <button type="button" class="tb" data-cmd="italic" title="italic (⌘I)"><i>I</i></button>
+        <button type="button" class="tb" data-cmd="h2" title="heading">H</button>
+        <button type="button" class="tb" data-cmd="quote" title="quote">❝</button>
+        <button type="button" class="tb" data-cmd="ul" title="bulleted list">•</button>
+        <button type="button" class="tb" data-cmd="ol" title="numbered list">1.</button>
+        <button type="button" class="tb" data-cmd="link" title="link (⌘K)">🔗</button>
+        <button type="button" class="tb" data-cmd="code" title="inline code">{`</>`}</button>
+        <button type="button" class="tb" data-cmd="hr" title="divider">—</button>
+      </div>
+      <textarea
+        id="body-area"
+        name="body"
+        rows="14"
+        placeholder="write here…"
+        style="min-height: 320px;"
+      >{initial.body}</textarea>
+    </div>
+
+    <div id="preview-pane" class="preview" style="display: none;"></div>
+  </div>
 
   <div class="save-bar">
     <div>
@@ -102,14 +129,91 @@ const guid = initial.guid ?? newGuid();
   </div>
 </form>
 
+<style is:global>
+  .editor-tabs .tab {
+    min-height: 40px;
+    padding: 0 18px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .editor-tabs .tab.active {
+    color: var(--fg);
+    border-bottom-color: var(--fg);
+    font-weight: 500;
+  }
+  .toolbar .tb {
+    min-width: 40px; min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--fg);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .toolbar .tb:hover { background: rgba(0,0,0,0.05); }
+  .toolbar .tb:active { background: rgba(0,0,0,0.1); }
+
+  .preview {
+    padding: 16px 18px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-height: 320px;
+    line-height: 1.65;
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+  }
+  .preview h1, .preview h2, .preview h3 {
+    line-height: 1.25; margin: 1em 0 .4em;
+  }
+  .preview h1 { font-size: 1.5em; }
+  .preview h2 { font-size: 1.25em; }
+  .preview h3 { font-size: 1.1em; }
+  .preview p { margin: .6em 0; }
+  .preview ul, .preview ol { margin: .6em 0; padding-left: 1.4em; }
+  .preview li { margin: .2em 0; }
+  .preview blockquote {
+    margin: .8em 0; padding: .5em 1em;
+    border-left: 3px solid var(--border);
+    color: var(--muted);
+    background: rgba(0,0,0,0.02);
+  }
+  .preview img { max-width: 100%; height: auto; display: block; margin: 1em 0; border-radius: 4px; }
+  .preview a { color: #0066cc; text-decoration: underline; }
+  .preview code {
+    background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em;
+  }
+  .preview pre {
+    background: rgba(0,0,0,0.06); padding: 12px 14px; border-radius: 6px;
+    overflow-x: auto; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: .9em; line-height: 1.5;
+  }
+  .preview pre code { background: transparent; padding: 0; }
+  .preview hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
+</style>
+
 <script>
+  import { marked } from 'marked';
   import { compressImage, blobToBase64, formatBytes, filenameFromOriginal } from '../lib/compress';
+
+  marked.setOptions({ breaks: true, gfm: true });
 
   const form = document.getElementById('post-form') as HTMLFormElement;
   const picker = document.getElementById('image-picker') as HTMLInputElement;
   const cameraPicker = document.getElementById('camera-picker') as HTMLInputElement;
   const status = document.getElementById('image-status') as HTMLElement;
   const body = document.getElementById('body-area') as HTMLTextAreaElement;
+  const writePane = document.getElementById('write-pane') as HTMLElement;
+  const previewPane = document.getElementById('preview-pane') as HTMLElement;
+  const tabs = document.querySelectorAll<HTMLButtonElement>('.editor-tabs .tab');
+  const tbButtons = document.querySelectorAll<HTMLButtonElement>('.toolbar .tb');
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
   const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement | null;
 
@@ -118,6 +222,56 @@ const guid = initial.guid ?? newGuid();
   body.addEventListener('compositionstart', () => { isComposing = true; });
   body.addEventListener('compositionend', () => { isComposing = false; });
 
+  // -------- Tabs (write / preview) --------
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.tab!;
+      tabs.forEach((t) => t.classList.toggle('active', t === tab));
+      if (target === 'write') {
+        writePane.style.display = '';
+        previewPane.style.display = 'none';
+      } else {
+        previewPane.innerHTML = String(marked.parse(body.value || '*nothing yet*'));
+        previewPane.style.display = '';
+        writePane.style.display = 'none';
+      }
+    });
+  });
+
+  // -------- Toolbar --------
+  function wrapSelection(left: string, right = left, placeholder = 'text') {
+    const at = body.selectionStart ?? body.value.length;
+    const end = body.selectionEnd ?? at;
+    const selected = body.value.slice(at, end);
+    const content = selected || placeholder;
+    const replacement = left + content + right;
+    body.value = body.value.slice(0, at) + replacement + body.value.slice(end);
+    const cursorStart = at + left.length;
+    const cursorEnd = cursorStart + content.length;
+    body.selectionStart = cursorStart;
+    body.selectionEnd = cursorEnd;
+    body.focus();
+  }
+
+  function prefixLines(prefix: string) {
+    const at = body.selectionStart ?? body.value.length;
+    const end = body.selectionEnd ?? at;
+    const before = body.value.slice(0, at);
+    const selected = body.value.slice(at, end) || 'item';
+    const after = body.value.slice(end);
+    // Find start of current line if no selection.
+    const lineStart = before.lastIndexOf('\n') + 1;
+    const head = body.value.slice(lineStart, at);
+    const lines = (head + selected).split('\n').map((l, i) =>
+      typeof prefix === 'string' ? prefix.replace('{i}', String(i + 1)) + l : l,
+    );
+    const newMiddle = lines.join('\n');
+    body.value = body.value.slice(0, lineStart) + newMiddle + after;
+    const cursor = lineStart + newMiddle.length;
+    body.selectionStart = body.selectionEnd = cursor;
+    body.focus();
+  }
+
   function insertAtCursor(text: string) {
     const at = body.selectionStart ?? body.value.length;
     const end = body.selectionEnd ?? at;
@@ -125,6 +279,47 @@ const guid = initial.guid ?? newGuid();
     const cursor = at + text.length;
     body.selectionStart = body.selectionEnd = cursor;
     body.focus();
+  }
+
+  function applyCommand(cmd: string) {
+    switch (cmd) {
+      case 'bold': return wrapSelection('**', '**', 'bold');
+      case 'italic': return wrapSelection('_', '_', 'italic');
+      case 'code': return wrapSelection('`', '`', 'code');
+      case 'h2': return prefixLines('## ');
+      case 'quote': return prefixLines('> ');
+      case 'ul': return prefixLines('- ');
+      case 'ol': return prefixLines('{i}. ');
+      case 'link': {
+        const url = prompt('link URL', 'https://');
+        if (!url) return;
+        const at = body.selectionStart ?? 0;
+        const end = body.selectionEnd ?? at;
+        const text = body.value.slice(at, end) || 'link';
+        return wrapSelection('[', `](${url})`, text);
+      }
+      case 'hr': return insertAtCursor('\n\n---\n\n');
+    }
+  }
+
+  tbButtons.forEach((b) => b.addEventListener('click', () => applyCommand(b.dataset.cmd!)));
+
+  // Keyboard shortcuts (⌘B, ⌘I, ⌘K). Skip during IME.
+  body.addEventListener('keydown', (e) => {
+    if (isComposing) return;
+    if (!(e.metaKey || e.ctrlKey)) return;
+    if (e.key === 'b') { e.preventDefault(); applyCommand('bold'); }
+    else if (e.key === 'i') { e.preventDefault(); applyCommand('italic'); }
+    else if (e.key === 'k') { e.preventDefault(); applyCommand('link'); }
+  });
+
+  // -------- Image insertion (picker / paste / drop) --------
+  function replacePlaceholder(placeholder: string, knownIndex: number, replacement: string) {
+    const i = knownIndex >= 0 ? knownIndex : body.value.indexOf(placeholder);
+    if (i < 0) return;
+    body.value = body.value.slice(0, i) + replacement + body.value.slice(i + placeholder.length);
+    const cursor = i + replacement.length;
+    body.selectionStart = body.selectionEnd = cursor;
   }
 
   async function handleFile(file: File) {
@@ -174,16 +369,6 @@ const guid = initial.guid ?? newGuid();
     }
   }
 
-  function replacePlaceholder(placeholder: string, knownIndex: number, replacement: string) {
-    const i = knownIndex >= 0 ? knownIndex : body.value.indexOf(placeholder);
-    if (i < 0) return;
-    body.value = body.value.slice(0, i) + replacement + body.value.slice(i + placeholder.length);
-    const cursor = i + replacement.length;
-    body.selectionStart = body.selectionEnd = cursor;
-  }
-
-  // Library picker (multi-select). Uploads sequentially so the status line
-  // stays legible and we don't fire N parallel commits against GitHub.
   async function handlePicker(input: HTMLInputElement) {
     const files = Array.from(input.files ?? []);
     input.value = '';
@@ -196,7 +381,6 @@ const guid = initial.guid ?? newGuid();
   picker?.addEventListener('change', () => handlePicker(picker));
   cameraPicker?.addEventListener('change', () => handlePicker(cameraPicker));
 
-  // Paste an image from clipboard. Skip during IME composition.
   body.addEventListener('paste', (e) => {
     if (isComposing) return;
     const items = e.clipboardData?.items;
@@ -213,11 +397,8 @@ const guid = initial.guid ?? newGuid();
     }
   });
 
-  // Drag and drop onto the textarea.
   body.addEventListener('dragover', (e) => {
-    if (e.dataTransfer?.types.includes('Files')) {
-      e.preventDefault();
-    }
+    if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
   });
   body.addEventListener('drop', (e) => {
     const files = e.dataTransfer?.files;
@@ -226,11 +407,12 @@ const guid = initial.guid ?? newGuid();
     for (const f of files) {
       if (f.type.startsWith('image/')) {
         handleFile(f);
-        break;  // one at a time to keep status legible
+        break;
       }
     }
   });
 
+  // -------- Save / delete --------
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     saveBtn.disabled = true;
