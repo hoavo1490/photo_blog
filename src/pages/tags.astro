@@ -1,0 +1,71 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { byDateDesc } from '../utils/tags';
+import { postUrl } from '../utils/post-url';
+
+const posts = (await getCollection('posts')).sort(byDateDesc);
+
+const byTag = new Map<string, typeof posts>();
+for (const p of posts) {
+  for (const t of p.data.tags) {
+    const list = byTag.get(t) ?? [];
+    list.push(p);
+    byTag.set(t, list);
+  }
+}
+
+const tags = [...byTag.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+const counts = tags.map(([t, list]) => [t, list.length] as const);
+const max = Math.max(1, ...counts.map(([, n]) => n));
+const min = Math.min(...counts.map(([, n]) => n));
+
+// Map count -> color and font-size for the cloud.
+function weight(n: number) {
+  return max === min ? 0.5 : (n - min) / (max - min);
+}
+function lerpColor(t: number): string {
+  // #f8e0e6 -> #ff3333
+  const a = [0xf8, 0xe0, 0xe6];
+  const b = [0xff, 0x33, 0x33];
+  const c = a.map((x, i) => Math.round(x + (b[i] - x) * t));
+  return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+---
+<BaseLayout title="tags">
+  <article>
+    <section class="title"><h2>tags</h2></section>
+    <section class="post">
+      <div id="tag_cloud">
+        {tags.map(([tag, list]) => {
+          const w = weight(list.length);
+          const size = (0.9 + w * 1.1).toFixed(2);   // 0.9em → 2.0em
+          return (
+            <a
+              href={`/tags/${encodeURIComponent(tag)}.html`}
+              title={`${tag} (${list.length})`}
+              style={`color: ${lerpColor(w)}; font-size: ${size}em;`}
+            >{tag}</a>
+          );
+        })}
+      </div>
+
+      <ul class="listing">
+        {tags.map(([tag, list]) => (
+          <>
+            <li class="listing-seperator" id={tag}>{tag}</li>
+            {list.map((p) => {
+              const dateStr = p.data.date.toISOString().slice(0, 10);
+              return (
+                <li class="listing-item">
+                  <time datetime={dateStr}>{dateStr}</time>{' '}
+                  <a href={postUrl(p)} title={p.data.title}>{p.data.title}</a>
+                </li>
+              );
+            })}
+          </>
+        ))}
+      </ul>
+    </section>
+  </article>
+</BaseLayout>

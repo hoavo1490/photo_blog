@@ -1,0 +1,28 @@
+{
+  "name": "lhzhang-blog",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "normalize-posts": "node scripts/normalize-posts.mjs"
+  },
+  "dependencies": {
+    "@astrojs/rss": "^4.0.0",
+    "@astrojs/sitemap": "^3.2.0",
+    "astro": "^5.0.0",
+    "mdast-util-to-string": "^4.0.0",
+    "photoswipe": "^5.4.4",
+    "unist-util-visit": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "gray-matter": "^4.0.3",
+    "sass": "^1.80.0",
+    "typescript": "^5.6.0"
+  }
+}

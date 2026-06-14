@@ -1,0 +1,13 @@
+---
+import { nav, siteName } from '../data/nav';
+---
+<header class="site-header">
+  <div class="site-title">
+    <h1><a title={siteName} href="/">{siteName}</a></h1>
+  </div>
+  <nav>
+    {nav.map((item) => (
+      <span><a title={item.title} href={item.href}><i class={item.icon}></i></a></span>
+    ))}
+  </nav>
+</header>

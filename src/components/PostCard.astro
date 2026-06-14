@@ -1,0 +1,19 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { postUrl } from '../utils/post-url';
+
+interface Props {
+  post: CollectionEntry<'posts'>;
+  cover: string;
+  desc?: string;
+}
+const { post, cover, desc } = Astro.props;
+const tagsAttr = post.data.tags.join(' ');
+---
+<a class="card" href={postUrl(post)} data-tags={tagsAttr}>
+  <img loading="lazy" src={cover} alt={post.data.title} />
+  <div class="overlay">
+    <div class="title">{post.data.title}</div>
+    <div class="desc">{desc ?? post.data.description ?? ''}</div>
+  </div>
+</a>

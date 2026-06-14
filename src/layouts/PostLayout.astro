@@ -1,0 +1,51 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { adjacentPosts } from '../utils/adjacent';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props { post: CollectionEntry<'posts'> }
+const { post } = Astro.props;
+
+const all = await getCollection('posts');
+const { previous, next } = adjacentPosts(all, post);
+const dateStr = post.data.date.toISOString().slice(0, 10);
+---
+<BaseLayout title={post.data.title} description={post.data.description}>
+  <article>
+    <section class="title">
+      <h2>{post.data.title}</h2>
+    </section>
+    <section class="meta">
+      <span class="time">
+        <time datetime={dateStr}>{dateStr}</time>
+      </span>
+      {post.data.tags.length > 0 && (
+        <span class="tags">
+          {post.data.tags.map((tag) => (
+            <a href={`/tags/${encodeURIComponent(tag)}.html`} title={tag}>#{tag}</a>
+          ))}
+        </span>
+      )}
+    </section>
+    <section class="post">
+      <slot />
+    </section>
+    <div class="divider">
+      <span>
+        {previous
+          ? <a href={previous.url} title={previous.title}><i class="fa fa-chevron-left"></i></a>
+          : <i class="fa fa-circle"></i>}
+      </span>
+      <span>
+        {next
+          ? <a href={next.url} title={next.title}><i class="fa fa-chevron-right"></i></a>
+          : <i class="fa fa-circle"></i>}
+      </span>
+    </div>
+  </article>
+</BaseLayout>
+
+<script>
+  import '../scripts/lightbox';
+</script>

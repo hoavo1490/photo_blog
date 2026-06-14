@@ -1,0 +1,24 @@
+@use "vars" as *;
+
+#tag_cloud {
+  margin-bottom: 1em;
+  line-height: 1.8;
+
+  a {
+    display: inline-block;
+    margin: 0 .35em;
+    font-family: #{$label-font};
+    text-decoration: none;
+  }
+}
+
+.tag-listing {
+  h3 {
+    font-family: #{$label-font};
+    margin-top: 2em;
+    color: #999;
+  }
+  ul { list-style: none; padding-left: 0; }
+  li { padding: 0; }
+  time { color: #999; margin-right: 1em; }
+}

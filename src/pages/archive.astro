@@ -1,0 +1,32 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { byDateDesc, groupByYear } from '../utils/tags';
+import { postUrl } from '../utils/post-url';
+
+const posts = (await getCollection('posts')).sort(byDateDesc);
+const byYear = groupByYear(posts);
+---
+<BaseLayout title="archive">
+  <article>
+    <section class="title"><h2>archive</h2></section>
+    <section class="post">
+      <ul class="listing">
+        {byYear.map(([year, list]) => (
+          <>
+            <li class="listing-seperator">{year}</li>
+            {list.map((p) => {
+              const dateStr = p.data.date.toISOString().slice(0, 10);
+              return (
+                <li class="listing-item">
+                  <time datetime={dateStr}>{dateStr}</time>{' '}
+                  <a href={postUrl(p)} title={p.data.title}>{p.data.title}</a>
+                </li>
+              );
+            })}
+          </>
+        ))}
+      </ul>
+    </section>
+  </article>
+</BaseLayout>
