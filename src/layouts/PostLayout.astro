@@ -1,10 +1,9 @@
 ---
 import { env } from 'cloudflare:workers';
 import BaseLayout from './BaseLayout.astro';
-import { renderPostBody, coverUrlFor } from '../lib/render';
-import { buildImageResolver } from '../lib/render';
+import { coverUrlFor, buildBodyImageResolver } from '../lib/render';
 import * as tagsRepo from '../lib/db/tags';
-import { firstParagraph, firstBodyImageInfo, allImageTokens } from '../lib/markdown';
+import { firstParagraph, firstBodyImageInfo, rewriteImageTokens } from '../lib/markdown';
 import type { Post } from '../lib/db/posts';
 import { marked } from 'marked';
 import { defaultAuthor, defaultSiteName } from '../data/nav';
@@ -16,13 +15,11 @@ const driver = Astro.locals.db!;
 const tenant = Astro.locals.tenant!;
 const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
 
-const rewritten = await renderPostBody(driver, post, env_);
+// One batched SELECT covers both the body rewrite and the LCP preload.
+const bodyResolver = await buildBodyImageResolver(driver, post, env_);
+const rewritten = rewriteImageTokens(post.body, bodyResolver);
 const rendered = await marked.parse(rewritten);
-
-// Build the same resolver renderPostBody used so we can compute the
-// LCP preload for the first body image without re-doing the work.
-const lcpResolver = await buildImageResolver(driver, post.siteId, allImageTokens(post.body), env_);
-const firstBodyImg = firstBodyImageInfo(post.body, lcpResolver);
+const firstBodyImg = firstBodyImageInfo(post.body, bodyResolver);
 const dateStr = post.publishedAt ? post.publishedAt.toISOString().slice(0, 10) : '';
 
 const cover = await coverUrlFor(driver, post, env_);

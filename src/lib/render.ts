@@ -57,12 +57,23 @@ export async function renderPostBody(
   post: Post,
   env: RenderEnv,
 ): Promise<string> {
-  // Extract token uuids referenced by the body so we can batch-fetch.
+  const resolver = await buildBodyImageResolver(driver, post, env);
+  return rewriteImageTokens(post.body, resolver);
+}
+
+/** Build the resolver used by `rewriteImageTokens`. Exposed so callers
+ *  who need both the rendered body AND additional metadata about the
+ *  same image set (e.g. PostLayout's LCP preload) can build it once and
+ *  reuse, instead of paying for a second batch SELECT. */
+export async function buildBodyImageResolver(
+  driver: SqlDriver,
+  post: Post,
+  env: RenderEnv,
+): Promise<ImageResolver> {
   const tokens = post.body.matchAll(/\(image:([0-9a-f-]{36})\)/g);
   const ids: string[] = [];
   for (const m of tokens) ids.push(m[1]);
-  const resolver = await buildImageResolver(driver, post.siteId, ids, env);
-  return rewriteImageTokens(post.body, resolver);
+  return buildImageResolver(driver, post.siteId, ids, env);
 }
 
 /** Compute the cover URL for a card-grid entry. Prefers cover_image_id when

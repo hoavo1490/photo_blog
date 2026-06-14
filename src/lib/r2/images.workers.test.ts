@@ -87,26 +87,17 @@ describe('uploadImage', () => {
 });
 
 describe('publicUrlForKey', () => {
-  it('prefers R2_PUBLIC_BASE over R2_DEV_BASE', () => {
-    const url = publicUrlForKey('s/2025/01/01/abc-x.jpg', {
+  it('returns the Worker-proxied /img/<key> URL', () => {
+    const url = publicUrlForKey('s/2025/01/01/abc-x.jpg');
+    expect(url).toBe('/img/s/2025/01/01/abc-x.jpg');
+  });
+
+  it('ignores any env arg (kept for back-compat)', () => {
+    const url = publicUrlForKey('s/x.jpg', {
       R2_PUBLIC_BASE: 'https://media.example.com',
       R2_DEV_BASE: 'https://dev.r2.dev',
     });
-    expect(url).toBe('https://media.example.com/s/2025/01/01/abc-x.jpg');
-  });
-
-  it('falls back to R2_DEV_BASE when no public base is set', () => {
-    const url = publicUrlForKey('s/x.jpg', { R2_DEV_BASE: 'https://dev.r2.dev' });
-    expect(url).toBe('https://dev.r2.dev/s/x.jpg');
-  });
-
-  it('throws when neither base is set', () => {
-    expect(() => publicUrlForKey('s/x.jpg', {})).toThrow(/R2_PUBLIC_BASE|R2_DEV_BASE/);
-  });
-
-  it('strips a trailing slash on the base', () => {
-    const url = publicUrlForKey('s/x.jpg', { R2_PUBLIC_BASE: 'https://media.test/' });
-    expect(url).toBe('https://media.test/s/x.jpg');
+    expect(url).toBe('/img/s/x.jpg');
   });
 });
 
