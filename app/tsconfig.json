@@ -7,6 +7,6 @@
     "paths": {
       "~/*": ["./src/*"]
     },
-    "types": ["@cloudflare/workers-types"]
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers/types"]
   }
 }

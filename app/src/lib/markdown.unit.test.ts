@@ -1,0 +1,140 @@
+import { describe, it, expect } from 'vitest';
+import {
+  firstImageToken,
+  firstImageUrl,
+  firstParagraph,
+  allImageTokens,
+  rewriteImageTokens,
+} from './markdown';
+
+const UUID_A = '11111111-2222-3333-4444-555555555555';
+const UUID_B = '66666666-7777-8888-9999-aaaaaaaaaaaa';
+
+describe('firstImageToken', () => {
+  it('returns the uuid of the first image: token', () => {
+    const body = `intro\n\n![](image:${UUID_A})\n\nrest`;
+    expect(firstImageToken(body)).toBe(UUID_A);
+  });
+
+  it('returns null when no token is present', () => {
+    expect(firstImageToken('just some text\n\nmore text')).toBeNull();
+  });
+
+  it('returns null when only raw URL images are present', () => {
+    expect(firstImageToken('![alt](https://example.com/x.jpg)')).toBeNull();
+  });
+
+  it('picks the earliest token when multiple exist', () => {
+    const body = `![](image:${UUID_A}) and ![](image:${UUID_B})`;
+    expect(firstImageToken(body)).toBe(UUID_A);
+  });
+});
+
+describe('firstImageUrl', () => {
+  it('returns the URL of the first http image', () => {
+    expect(firstImageUrl('text ![alt](https://cdn.example.com/x.jpg) text')).toBe(
+      'https://cdn.example.com/x.jpg',
+    );
+  });
+
+  it('returns the URL of the first https image', () => {
+    expect(firstImageUrl('![](http://example.com/a.png)')).toBe('http://example.com/a.png');
+  });
+
+  it('returns null when no image URL is present', () => {
+    expect(firstImageUrl(`![](image:${UUID_A})`)).toBeNull();
+  });
+});
+
+describe('firstParagraph', () => {
+  it('returns the first non-heading, non-image paragraph', () => {
+    const body = `# Title\n\nThis is the lead paragraph.\n\nSecond paragraph.`;
+    expect(firstParagraph(body)).toBe('This is the lead paragraph.');
+  });
+
+  it('skips fenced code blocks', () => {
+    const body = '```\ncode here\n```\n\nActual text.';
+    expect(firstParagraph(body)).toBe('Actual text.');
+  });
+
+  it('skips image-only lines', () => {
+    const body = `![cover](image:${UUID_A})\n\nReal paragraph.`;
+    expect(firstParagraph(body)).toBe('Real paragraph.');
+  });
+
+  it('truncates at maxChars without splitting words', () => {
+    const body = 'one two three four five six seven eight nine ten eleven twelve';
+    const out = firstParagraph(body, 20);
+    expect(out).not.toBeNull();
+    expect(out!.length).toBeLessThanOrEqual(20);
+    expect(out!.endsWith(' ')).toBe(false);
+    // last char should not be a partial word
+    expect(body.startsWith(out!)).toBe(true);
+  });
+
+  it('returns null on empty body', () => {
+    expect(firstParagraph('')).toBeNull();
+    expect(firstParagraph('   \n\n')).toBeNull();
+  });
+
+  it('returns null when body has only headings and images', () => {
+    expect(firstParagraph(`# Heading\n\n![](image:${UUID_A})`)).toBeNull();
+  });
+});
+
+describe('allImageTokens', () => {
+  it('returns unique tokens in document order', () => {
+    const body = `![](image:${UUID_A}) ... ![](image:${UUID_B}) ... ![](image:${UUID_A})`;
+    expect(allImageTokens(body)).toEqual([UUID_A, UUID_B]);
+  });
+
+  it('returns empty array when no tokens are present', () => {
+    expect(allImageTokens('just text')).toEqual([]);
+  });
+});
+
+describe('rewriteImageTokens', () => {
+  const resolver = (id: string) =>
+    id === UUID_A ? { url: 'https://cdn/a.jpg' } : null;
+
+  it('replaces a single token with the resolved URL', () => {
+    const out = rewriteImageTokens(`![cover](image:${UUID_A})`, resolver);
+    expect(out).toBe('![cover](https://cdn/a.jpg)');
+  });
+
+  it('preserves alt text', () => {
+    const out = rewriteImageTokens(`![hello world](image:${UUID_A})`, resolver);
+    expect(out).toContain('![hello world](https://cdn/a.jpg)');
+  });
+
+  it('falls back to resolver alt when no inline alt is provided', () => {
+    const out = rewriteImageTokens(`![](image:${UUID_A})`, (id) =>
+      id === UUID_A ? { url: 'https://cdn/a.jpg', alt: 'fallback' } : null,
+    );
+    expect(out).toBe('![fallback](https://cdn/a.jpg)');
+  });
+
+  it('leaves real http URLs untouched', () => {
+    const body = `![](https://example.com/x.jpg)`;
+    expect(rewriteImageTokens(body, resolver)).toBe(body);
+  });
+
+  it('leaves unresolved tokens unchanged', () => {
+    const body = `![](image:${UUID_B})`;
+    expect(rewriteImageTokens(body, resolver)).toBe(body);
+  });
+
+  it('handles multiple tokens on one line', () => {
+    const out = rewriteImageTokens(
+      `pre ![a](image:${UUID_A}) mid ![b](image:${UUID_A}) post`,
+      resolver,
+    );
+    expect(out).toBe('pre ![a](https://cdn/a.jpg) mid ![b](https://cdn/a.jpg) post');
+  });
+
+  it('handles tokens at the start and end of the body', () => {
+    const body = `![s](image:${UUID_A})\n\nmiddle\n\n![e](image:${UUID_A})`;
+    const out = rewriteImageTokens(body, resolver);
+    expect(out).toBe(`![s](https://cdn/a.jpg)\n\nmiddle\n\n![e](https://cdn/a.jpg)`);
+  });
+});

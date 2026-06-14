@@ -8,5 +8,11 @@
     "directory": "./dist",
     "binding": "ASSETS"
   },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "r2_buckets": [
+    { "binding": "PHOTOS", "bucket_name": "riovv-media" }
+  ],
+  "vars": {
+    "R2_DEV_BASE": "https://riovv-media.<account>.r2.dev"
+  }
 }

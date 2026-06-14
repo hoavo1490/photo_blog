@@ -1,0 +1,41 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import * as posts from '../lib/db/posts';
+import { postUrl } from '../lib/post-url';
+
+const tenant = Astro.locals.tenant!;
+const driver = Astro.locals.db!;
+const all = await posts.listPublished(driver, { siteId: tenant.id, limit: 1000 });
+
+const byYear = new Map<number, typeof all>();
+for (const p of all) {
+  const y = p.publishedAt!.getUTCFullYear();
+  const list = byYear.get(y) ?? [];
+  list.push(p);
+  byYear.set(y, list);
+}
+const years = [...byYear.entries()].sort((a, b) => b[0] - a[0]);
+---
+<BaseLayout title="archive">
+  <article>
+    <section class="title"><h2>archive</h2></section>
+    <section class="post">
+      <ul class="listing">
+        {years.map(([year, list]) => (
+          <>
+            <li class="listing-seperator">{year}</li>
+            {list.map((p) => {
+              const dateStr = p.publishedAt!.toISOString().slice(0, 10);
+              return (
+                <li class="listing-item">
+                  <time datetime={dateStr}>{dateStr}</time>{' '}
+                  <a href={postUrl({ publishedAt: p.publishedAt!, slug: p.slug })}>{p.title}</a>
+                </li>
+              );
+            })}
+          </>
+        ))}
+      </ul>
+    </section>
+  </article>
+</BaseLayout>
