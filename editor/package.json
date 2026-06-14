@@ -15,7 +15,8 @@
     "@octokit/rest": "^21.0.0",
     "astro": "^5.0.0",
     "gray-matter": "^4.0.3",
-    "jose": "^5.9.0"
+    "jose": "^5.9.0",
+    "dotenv": "^16.4.7"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
