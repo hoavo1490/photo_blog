@@ -1,14 +1,7 @@
 ---
 import { author } from '../data/nav';
-import { getCollection } from 'astro:content';
-import { byDateDesc } from '../utils/tags';
-
-const posts = (await getCollection('posts')).sort(byDateDesc);
-const firstYear = posts.at(-1)?.data.date.getUTCFullYear() ?? new Date().getUTCFullYear();
 const thisYear = new Date().getUTCFullYear();
 ---
 <footer>
-  <div>
-    &copy; {firstYear} ~ {thisYear} {author} | powered by <a href="https://astro.build" title="Astro">astro</a>
-  </div>
+  <div>&copy; {thisYear} {author}</div>
 </footer>
