@@ -17,14 +17,14 @@
   // values stay in the dashboard as Secrets.
   "vars": {
     "R2_DEV_BASE": "https://pub-bda4e92fe6f34988b885f5e793c31420.r2.dev",
-    "ALLOWED_USERS": "hoavo1490"
+    "ALLOWED_USERS": "hoavo1490",
+    "GITHUB_OAUTH_CLIENT_ID": "Ov23likTQeKJlWQ9d0bQ"
   }
   // Path-based admin: /admin/* (and /login, /logout, /auth/*) require a
   // session; everything else is public. No ADMIN_HOST env needed.
   //
   // Secrets set in dashboard (Settings -> Variables and secrets):
   //   DATABASE_URL               -- Neon pooler URL with sslmode=require
-  //   GITHUB_OAUTH_CLIENT_ID
   //   GITHUB_OAUTH_CLIENT_SECRET
   //   COOKIE_DOMAIN              -- (optional) blank on workers.dev
   //   R2_PUBLIC_BASE             -- (optional) custom domain; falls back to R2_DEV_BASE
