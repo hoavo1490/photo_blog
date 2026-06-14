@@ -125,21 +125,21 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
         fetchpriority="high"
       />
     )}
-    {/* Google Fonts: preconnect + async CSS load. The media-print swap
-        makes the <link> non-blocking; the noscript fallback keeps it
-        working for users with JS disabled. display=swap renders text in
-        the fallback font until Ubuntu is ready. */}
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css?family=Ubuntu:300&display=swap"
-      media="print"
-      onload="this.media='all'"
-    />
-    <noscript>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Ubuntu:300&display=swap" />
-    </noscript>
+    {/* Self-hosted Ubuntu Light. Same-origin avoids the cross-domain
+        DNS/TCP/TLS round-trip and a render-blocking CSS request to
+        googleapis.com. Preload + inline @font-face so the font starts
+        downloading during head parse but text still renders in the
+        fallback first via font-display: swap. */}
+    <link rel="preload" href="/fonts/ubuntu-300.woff2" as="font" type="font/woff2" crossorigin />
+    <style is:inline>{`
+      @font-face {
+        font-family: 'Ubuntu';
+        font-style: normal;
+        font-weight: 300;
+        font-display: swap;
+        src: url('/fonts/ubuntu-300.woff2') format('woff2');
+      }
+    `}</style>
 
     {jsonLd && (
       <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />

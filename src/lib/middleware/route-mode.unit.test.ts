@@ -42,6 +42,10 @@ describe('classifyRoute', () => {
     expect(classifyRoute({ pathname: '/img/foo.400w.webp' })).toBe('asset');
   });
 
+  it('returns asset for /fonts/* (self-hosted webfonts)', () => {
+    expect(classifyRoute({ pathname: '/fonts/ubuntu-300.woff2' })).toBe('asset');
+  });
+
   it('routes /robots.txt as public-tenant (dynamic endpoint)', () => {
     expect(classifyRoute({ pathname: '/robots.txt' })).toBe('public-tenant');
   });

@@ -22,7 +22,7 @@ export interface ClassifyInput {
 // /img/* is a Worker-served image proxy with its own cache headers; it
 // has no use for tenant resolution or DB drivers, so it skips the
 // middleware pipeline like an asset.
-const STATIC_PREFIXES = ['/_astro/', '/_image/', '/favicon.ico', '/img/'];
+const STATIC_PREFIXES = ['/_astro/', '/_image/', '/favicon.ico', '/img/', '/fonts/'];
 
 // Path prefixes that put a request into the admin branch. Every admin route
 // either lives under /admin/* or is part of the auth flow.
