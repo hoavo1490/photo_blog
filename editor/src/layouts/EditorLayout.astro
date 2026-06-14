@@ -1,0 +1,93 @@
+---
+interface Props { title?: string }
+const { title = 'riovv editor' } = Astro.props;
+const session = (Astro.locals as any).session as { login: string } | undefined;
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#111111" />
+    <meta name="robots" content="noindex" />
+    <title>{title}</title>
+    <link rel="icon" href="data:," />
+    <style is:global>
+      :root {
+        --bg: #fafafa;
+        --bg-elev: #ffffff;
+        --fg: #111;
+        --muted: #777;
+        --border: #e3e3e3;
+        --accent: #111;
+        --accent-fg: #fff;
+        --danger: #c0392b;
+        --safe-bottom: env(safe-area-inset-bottom);
+        --safe-top: env(safe-area-inset-top);
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { background: var(--bg); color: var(--fg); }
+      body {
+        font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        min-height: 100dvh;
+        padding-bottom: calc(72px + var(--safe-bottom));
+      }
+      a { color: inherit; text-decoration: none; }
+      a:hover { color: #444; }
+      input, textarea, button {
+        font: inherit; color: inherit;
+      }
+      input, textarea {
+        background: var(--bg-elev);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+        width: 100%;
+        font-size: 16px; /* prevents iOS auto-zoom */
+      }
+      input:focus, textarea:focus { outline: 2px solid #111; outline-offset: -1px; }
+      button {
+        min-height: 44px;
+        padding: 10px 16px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--bg-elev);
+        cursor: pointer;
+      }
+      button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+      button.danger { color: var(--danger); border-color: var(--danger); }
+      button:disabled { opacity: .5; cursor: not-allowed; }
+
+      .app-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: calc(var(--safe-top) + 12px) 16px 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-elev);
+        position: sticky; top: 0; z-index: 10;
+      }
+      .app-header h1 { font-size: 17px; font-weight: 600; }
+      .app-header .who { font-size: 13px; color: var(--muted); }
+
+      main { padding: 16px; max-width: 720px; margin: 0 auto; }
+
+      .save-bar {
+        position: fixed; left: 0; right: 0; bottom: 0;
+        padding: 12px 16px calc(12px + var(--safe-bottom));
+        background: var(--bg-elev);
+        border-top: 1px solid var(--border);
+        display: flex; gap: 8px; justify-content: space-between;
+        z-index: 10;
+      }
+      .save-bar > .right { display: flex; gap: 8px; }
+    </style>
+  </head>
+  <body>
+    <header class="app-header">
+      <h1><a href="/">riovv editor</a></h1>
+      {session && <span class="who">{session.login} · <a href="/logout">sign out</a></span>}
+    </header>
+    <main>
+      <slot />
+    </main>
+  </body>
+</html>

@@ -1,0 +1,166 @@
+---
+import { newGuid } from '../lib/post';
+
+interface Props {
+  mode: 'new' | 'edit';
+  initial: {
+    title: string;
+    date: string;
+    tags: string[];
+    body: string;
+    cover?: string;
+    description?: string;
+    guid?: string;
+    slug?: string;     // edit-only
+    sha?: string;      // edit-only
+  };
+}
+const { mode, initial } = Astro.props;
+const today = new Date().toISOString().slice(0, 10);
+const guid = initial.guid ?? newGuid();
+---
+<form id="post-form" method="post" action="/api/save">
+  <input type="hidden" name="mode" value={mode} />
+  <input type="hidden" name="guid" value={guid} />
+  {initial.slug && <input type="hidden" name="originalSlug" value={initial.slug} />}
+  {initial.sha && <input type="hidden" name="sha" value={initial.sha} />}
+
+  <label style="display: block; margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">title</div>
+    <input name="title" required value={initial.title} placeholder="post title" />
+  </label>
+
+  <label style="display: block; margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">date</div>
+    <input name="date" type="date" required value={initial.date || today} />
+  </label>
+
+  <label style="display: block; margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">tags (comma-separated)</div>
+    <input name="tags" value={initial.tags.join(', ')} placeholder="photography, leica" />
+  </label>
+
+  <label style="display: block; margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">cover image (optional override)</div>
+    <input name="cover" value={initial.cover ?? ''} placeholder="/media/files/2026/06/14/foo.jpg" />
+  </label>
+
+  <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+    <label class="primary" style="
+      display: inline-flex; align-items: center; gap: 8px;
+      min-height: 44px; padding: 0 16px;
+      border: 1px solid var(--border); border-radius: 999px;
+      cursor: pointer; background: var(--bg-elev);
+    ">
+      <span>+ image</span>
+      <input id="image-picker" type="file" accept="image/*" capture="environment" style="display: none;" />
+    </label>
+    <span id="image-status" style="align-self: center; font-size: 13px; color: var(--muted);"></span>
+  </div>
+
+  <label style="display: block; margin-bottom: 14px;">
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">body (markdown)</div>
+    <textarea name="body" rows="14" placeholder="write here…" style="min-height: 320px;">{initial.body}</textarea>
+  </label>
+
+  <div class="save-bar">
+    <div>
+      {mode === 'edit' && (
+        <button type="button" class="danger" id="delete-btn">delete</button>
+      )}
+    </div>
+    <div class="right">
+      <button type="button" onclick="history.back()">cancel</button>
+      <button type="submit" class="primary" id="save-btn">save</button>
+    </div>
+  </div>
+</form>
+
+<script>
+  const form = document.getElementById('post-form') as HTMLFormElement;
+  const picker = document.getElementById('image-picker') as HTMLInputElement;
+  const status = document.getElementById('image-status') as HTMLElement;
+  const body = form.elements.namedItem('body') as HTMLTextAreaElement;
+  const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
+  const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement | null;
+
+  picker?.addEventListener('change', async () => {
+    const file = picker.files?.[0];
+    if (!file) return;
+    status.textContent = `uploading ${file.name}…`;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(',')[1];
+      try {
+        const r = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, base64 }),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        const { url } = await r.json();
+        // Insert at cursor with a sensible default alt.
+        const at = body.selectionStart ?? body.value.length;
+        const md = `\n![${file.name.replace(/\.[^.]+$/, '')}](${url})\n`;
+        body.value = body.value.slice(0, at) + md + body.value.slice(at);
+        status.textContent = `inserted ${url}`;
+      } catch (e: any) {
+        status.textContent = `upload failed: ${e.message ?? e}`;
+      } finally {
+        picker.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'saving…';
+    const fd = new FormData(form);
+    const payload: any = {
+      mode: fd.get('mode'),
+      title: fd.get('title'),
+      date: fd.get('date'),
+      tags: String(fd.get('tags') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+      cover: fd.get('cover') || undefined,
+      guid: fd.get('guid'),
+      body: fd.get('body') ?? '',
+    };
+    if (fd.get('originalSlug')) payload.originalSlug = fd.get('originalSlug');
+    if (fd.get('sha')) payload.sha = fd.get('sha');
+    try {
+      const r = await fetch('/api/save', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const { slug } = await r.json();
+      location.href = `/edit/${slug}`;
+    } catch (e: any) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'save';
+      alert('save failed: ' + (e.message ?? e));
+    }
+  });
+
+  deleteBtn?.addEventListener('click', async () => {
+    const slug = (form.elements.namedItem('originalSlug') as HTMLInputElement | null)?.value;
+    const sha = (form.elements.namedItem('sha') as HTMLInputElement | null)?.value;
+    if (!slug || !sha) return;
+    if (!confirm(`delete "${slug}"? this commits a deletion to the repo.`)) return;
+    try {
+      const r = await fetch('/api/delete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug, sha }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      location.href = '/';
+    } catch (e: any) {
+      alert('delete failed: ' + (e.message ?? e));
+    }
+  });
+</script>

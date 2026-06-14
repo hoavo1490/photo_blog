@@ -1,0 +1,12 @@
+---
+import EditorLayout from '../layouts/EditorLayout.astro';
+import PostForm from '../components/PostForm.astro';
+
+const today = new Date().toISOString().slice(0, 10);
+---
+<EditorLayout title="new post">
+  <PostForm
+    mode="new"
+    initial={{ title: '', date: today, tags: [], body: '' }}
+  />
+</EditorLayout>

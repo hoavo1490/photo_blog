@@ -5,7 +5,7 @@ import { remarkFirstImage } from './src/remark/first-image.mjs';
 import { remarkDescription } from './src/remark/description.mjs';
 
 export default defineConfig({
-  site: 'https://lhzhang.com',
+  site: 'https://riovv.com',
   trailingSlash: 'never',
   build: { format: 'file' },
   integrations: [sitemap()],

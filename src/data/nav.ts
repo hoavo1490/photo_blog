@@ -8,5 +8,5 @@ export const nav: NavItem[] = [
   { title: 'Subscribe', icon: 'fas fa-rss',        href: '/atom.xml' },
 ];
 
-export const siteName = 'rusty shutter';
-export const author = 'wayne';
+export const siteName = 'riovv';
+export const author = 'Rio';

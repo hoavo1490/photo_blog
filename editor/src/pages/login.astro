@@ -1,0 +1,21 @@
+---
+import EditorLayout from '../layouts/EditorLayout.astro';
+import { authorizeUrl } from '../lib/auth';
+
+const env = (Astro.locals as any).runtime?.env ?? process.env;
+const next = Astro.url.searchParams.get('next') ?? '/';
+const state = btoa(JSON.stringify({ next, n: crypto.randomUUID() }));
+const callbackUrl = new URL('/auth/callback', Astro.url).toString();
+const target = authorizeUrl(env, state, callbackUrl);
+---
+<EditorLayout title="sign in">
+  <section style="padding: 40px 0; text-align: center;">
+    <h2 style="font-size: 22px; font-weight: 600; margin-bottom: 8px;">riovv editor</h2>
+    <p style="color: var(--muted); margin-bottom: 24px;">Sign in with GitHub to write.</p>
+    <a class="primary" href={target} role="button" style="
+      display: inline-flex; align-items: center; gap: 8px;
+      min-height: 44px; padding: 10px 18px;
+      background: #111; color: #fff; border-radius: 999px;
+    ">Continue with GitHub</a>
+  </section>
+</EditorLayout>

@@ -1,21 +1,28 @@
-# rusty shutter
+# riovv
 
-Astro blog at [lhzhang.com](https://lhzhang.com).
+Rio's blog at [riovv.com](https://riovv.com). Built on Astro, deployed to Cloudflare Pages.
 
-## Develop
+## Repo layout
+
+```
+/                 the public blog (Astro static)
+└── editor/       the writing app (Astro on Cloudflare Workers) — mobile-first CMS
+```
+
+## Develop the public blog
 
 ```bash
 pnpm install
-pnpm dev          # local server at http://localhost:4321
+pnpm dev          # http://localhost:4321
 pnpm build        # static build to dist/
 pnpm preview      # serve dist/ locally
 ```
 
 ## Stack
 
-- Astro 5 with Content Collections (132 posts in `src/content/posts/`)
-- SCSS via Vite (`src/styles/`)
-- PhotoSwipe v5 for the post-image lightbox (bundled from npm)
+- Astro 5 + Content Collections (`src/content/posts/*.md`)
+- SCSS via Vite
+- PhotoSwipe v5 for the post-image lightbox
 - RSS via `@astrojs/rss` at `/atom.xml`
 - Sitemap via `@astrojs/sitemap`
 
@@ -25,32 +32,34 @@ pnpm preview      # serve dist/ locally
 - Build command: `pnpm build`
 - Output directory: `dist`
 - Node version: pinned via `.nvmrc` (22.12.0)
-- Custom domain: configured in CF Pages dashboard
+- Custom domain: `riovv.com` configured in CF Pages dashboard
 
 ## Layout
 
 ```
 src/
-├── content/posts/   132 markdown posts, frontmatter: title, date, tags, guid
+├── content/posts/   markdown posts, frontmatter: title, date, tags, guid, optional cover
 ├── pages/           index, archive, tags, about, 404, atom.xml + [year]/[month]/[day]/[slug]
 ├── layouts/         BaseLayout, PostLayout, PageLayout
-├── components/      Header, Footer, PostCard, TagChips
-├── scripts/         home-filter.ts (tag chips), lightbox.ts (PhotoSwipe)
-├── styles/          global.scss, _vars, _media-queries, _cards, _tags
-├── utils/           post-url, extract (cover/description from markdown body), adjacent, tags
-└── remark/          first-image, description (post-detail-only enrichment via remarkPluginFrontmatter)
+├── components/      Header, Footer, PostCard
+├── scripts/         lightbox.ts (PhotoSwipe wrapper)
+├── styles/          global.scss + _vars, _media-queries, _cards, _tags
+├── utils/           post-url, extract, adjacent, tags
+└── remark/          first-image, description
 public/
-├── media/           legacy /media/files/YYYY/MM/DD/*.jpg image URLs preserved 1:1
+├── media/           image assets, /media/files/YYYY/MM/DD/*.jpg
 └── _headers         Cloudflare caching rules
 ```
 
 ## Post URL contract
 
-Permalink format `/YYYY/MM/DD/slug.html` is preserved from the Jekyll era. RSS subscriber IDs (`<guid>`) carry over the original `urn:uuid:...` from `guid:` frontmatter.
+Permalink format `/YYYY/MM/DD/slug.html`. RSS items use the `urn:uuid:...` from frontmatter `guid:` so subscribers don't see duplicates if the format ever changes.
 
-## New post
+## Writing posts
 
-Create `src/content/posts/YYYY-MM-DD-slug.md`:
+The recommended way is the editor app at [editor.riovv.com](https://editor.riovv.com). See `editor/README.md`.
+
+For manual creation, add `src/content/posts/YYYY-MM-DD-slug.md`:
 
 ```yaml
 ---
@@ -64,4 +73,4 @@ guid: 'urn:uuid:GENERATE-WITH-uuidgen'
 content here
 ```
 
-The first image in the body becomes the homepage card cover. The first paragraph becomes the card description.
+The first image in the body becomes the homepage card cover; the first paragraph becomes the card description.
