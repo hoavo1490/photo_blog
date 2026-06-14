@@ -45,8 +45,8 @@ const guid = initial.guid ?? newGuid();
     <input name="cover" value={initial.cover ?? ''} placeholder="/media/files/2026/06/14/foo.jpg" />
   </label>
 
-  <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-    <label class="primary" style="
+  <div style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+    <label style="
       display: inline-flex; align-items: center; gap: 8px;
       min-height: 44px; padding: 0 16px;
       border: 1px solid var(--border); border-radius: 999px;
@@ -55,12 +55,20 @@ const guid = initial.guid ?? newGuid();
       <span>+ image</span>
       <input id="image-picker" type="file" accept="image/*" capture="environment" style="display: none;" />
     </label>
-    <span id="image-status" style="align-self: center; font-size: 13px; color: var(--muted);"></span>
+    <span id="image-status" style="font-size: 13px; color: var(--muted);"></span>
   </div>
 
   <label style="display: block; margin-bottom: 14px;">
-    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">body (markdown)</div>
-    <textarea name="body" rows="14" placeholder="write here…" style="min-height: 320px;">{initial.body}</textarea>
+    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">
+      body (markdown) — paste or drop an image to insert
+    </div>
+    <textarea
+      id="body-area"
+      name="body"
+      rows="14"
+      placeholder="write here…"
+      style="min-height: 320px;"
+    >{initial.body}</textarea>
   </label>
 
   <div class="save-bar">
@@ -77,41 +85,124 @@ const guid = initial.guid ?? newGuid();
 </form>
 
 <script>
+  import { compressImage, blobToBase64, formatBytes, filenameFromOriginal } from '../lib/compress';
+
   const form = document.getElementById('post-form') as HTMLFormElement;
   const picker = document.getElementById('image-picker') as HTMLInputElement;
   const status = document.getElementById('image-status') as HTMLElement;
-  const body = form.elements.namedItem('body') as HTMLTextAreaElement;
+  const body = document.getElementById('body-area') as HTMLTextAreaElement;
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
   const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement | null;
 
+  // Track IME composition so we don't process pastes mid-composition.
+  let isComposing = false;
+  body.addEventListener('compositionstart', () => { isComposing = true; });
+  body.addEventListener('compositionend', () => { isComposing = false; });
+
+  function insertAtCursor(text: string) {
+    const at = body.selectionStart ?? body.value.length;
+    const end = body.selectionEnd ?? at;
+    body.value = body.value.slice(0, at) + text + body.value.slice(end);
+    const cursor = at + text.length;
+    body.selectionStart = body.selectionEnd = cursor;
+    body.focus();
+  }
+
+  async function handleFile(file: File) {
+    if (!file.type.startsWith('image/')) {
+      status.textContent = `not an image: ${file.type || 'unknown'}`;
+      return;
+    }
+
+    const placeholder = `\n![uploading ${file.name}…](#uploading)\n`;
+    insertAtCursor(placeholder);
+    const placeholderStart = body.value.indexOf(placeholder);
+    status.textContent = `compressing ${file.name} (${formatBytes(file.size)})…`;
+
+    let compressed;
+    try {
+      compressed = await compressImage(file, { maxEdge: 1600, quality: 0.85 });
+    } catch (e: any) {
+      replacePlaceholder(placeholder, placeholderStart, '');
+      status.textContent = `compress failed: ${e.message ?? e}`;
+      return;
+    }
+
+    const savings = file.size > 0
+      ? Math.round(100 - (compressed.compressedSize / file.size) * 100)
+      : 0;
+    status.textContent =
+      `uploading ${formatBytes(file.size)} → ${formatBytes(compressed.compressedSize)} (-${savings}%)…`;
+
+    const filename = filenameFromOriginal(file.name, compressed.blob);
+    const base64 = await blobToBase64(compressed.blob);
+
+    try {
+      const r = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ filename, base64 }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const { url } = await r.json();
+      const alt = file.name.replace(/\.[^.]+$/, '');
+      const finalMarkdown = `\n![${alt}](${url})\n`;
+      replacePlaceholder(placeholder, placeholderStart, finalMarkdown);
+      status.textContent = `inserted ${url} (${formatBytes(compressed.compressedSize)})`;
+    } catch (e: any) {
+      replacePlaceholder(placeholder, placeholderStart, '');
+      status.textContent = `upload failed: ${e.message ?? e}`;
+    }
+  }
+
+  function replacePlaceholder(placeholder: string, knownIndex: number, replacement: string) {
+    const i = knownIndex >= 0 ? knownIndex : body.value.indexOf(placeholder);
+    if (i < 0) return;
+    body.value = body.value.slice(0, i) + replacement + body.value.slice(i + placeholder.length);
+    const cursor = i + replacement.length;
+    body.selectionStart = body.selectionEnd = cursor;
+  }
+
+  // Picker (camera or photo library).
   picker?.addEventListener('change', async () => {
     const file = picker.files?.[0];
-    if (!file) return;
-    status.textContent = `uploading ${file.name}…`;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      const base64 = dataUrl.split(',')[1];
-      try {
-        const r = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ filename: file.name, base64 }),
-        });
-        if (!r.ok) throw new Error(await r.text());
-        const { url } = await r.json();
-        // Insert at cursor with a sensible default alt.
-        const at = body.selectionStart ?? body.value.length;
-        const md = `\n![${file.name.replace(/\.[^.]+$/, '')}](${url})\n`;
-        body.value = body.value.slice(0, at) + md + body.value.slice(at);
-        status.textContent = `inserted ${url}`;
-      } catch (e: any) {
-        status.textContent = `upload failed: ${e.message ?? e}`;
-      } finally {
-        picker.value = '';
+    picker.value = '';
+    if (file) await handleFile(file);
+  });
+
+  // Paste an image from clipboard. Skip during IME composition.
+  body.addEventListener('paste', (e) => {
+    if (isComposing) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const it of items) {
+      if (it.type.startsWith('image/')) {
+        const file = it.getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleFile(file);
+          return;
+        }
       }
-    };
-    reader.readAsDataURL(file);
+    }
+  });
+
+  // Drag and drop onto the textarea.
+  body.addEventListener('dragover', (e) => {
+    if (e.dataTransfer?.types.includes('Files')) {
+      e.preventDefault();
+    }
+  });
+  body.addEventListener('drop', (e) => {
+    const files = e.dataTransfer?.files;
+    if (!files?.length) return;
+    e.preventDefault();
+    for (const f of files) {
+      if (f.type.startsWith('image/')) {
+        handleFile(f);
+        break;  // one at a time to keep status legible
+      }
+    }
   });
 
   form.addEventListener('submit', async (e) => {
