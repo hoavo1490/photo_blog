@@ -25,6 +25,12 @@ interface Props {
   tags?: string[];
   noindex?: boolean;
   jsonLd?: unknown;
+  /** When set, emit <link rel="preload" as="image"> with srcset/sizes
+   *  so the browser starts fetching the LCP image during head parsing
+   *  instead of after body discovery. Pass src + srcset + sizes that
+   *  exactly match the <img> on the page for the picked variant to be
+   *  the same. */
+  lcpImage?: { src: string; srcset?: string; sizes?: string };
 }
 
 const {
@@ -39,6 +45,7 @@ const {
   tags,
   noindex = false,
   jsonLd,
+  lcpImage,
 } = Astro.props;
 
 const siteName = Astro.locals.tenant?.name ?? defaultSiteName;
@@ -94,6 +101,22 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
     {/* Preconnect to the image origin (R2) so the TLS handshake happens
         in parallel with HTML parsing -- the LCP image lives here. */}
     {r2Origin && <link rel="preconnect" href={r2Origin} crossorigin />}
+
+    {/* LCP preload: start fetching the largest contentful image during
+        head parsing instead of after the body is discovered. Browsers
+        match the picked variant against srcset/sizes -- these MUST be
+        identical to what the <img> ultimately renders, or the preload
+        gets discarded and counts as wasted bytes. */}
+    {lcpImage && (
+      <link
+        rel="preload"
+        as="image"
+        href={lcpImage.src}
+        imagesrcset={lcpImage.srcset}
+        imagesizes={lcpImage.sizes}
+        fetchpriority="high"
+      />
+    )}
     {/* Google Fonts: preconnect + async CSS load. The media-print swap
         makes the <link> non-blocking; the noscript fallback keeps it
         working for users with JS disabled. display=swap renders text in
