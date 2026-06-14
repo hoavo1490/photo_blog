@@ -47,7 +47,14 @@ const latestDesc = cards[0]?.desc;
             <div class="section-title">{year}</div>
           </div>
           <div class="section-images">
-            {list.map((c) => <PostCard post={c.post} cover={c.cover} description={c.desc} />)}
+            {list.map((c) => (
+              <PostCard
+                post={c.post}
+                cover={c.cover}
+                description={c.desc}
+                priority={cards[0]?.post.id === c.post.id}
+              />
+            ))}
           </div>
         </section>
       ))}

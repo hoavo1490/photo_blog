@@ -6,11 +6,21 @@ interface Props {
   post: Post;
   cover: string;
   description?: string | null;
+  /** True for the first above-the-fold card -- emits loading=eager and
+   *  fetchpriority=high so the LCP image starts loading immediately
+   *  instead of waiting behind lazy-load heuristics. */
+  priority?: boolean;
 }
-const { post, cover, description } = Astro.props;
+const { post, cover, description, priority = false } = Astro.props;
 ---
 <a class="card" href={postUrl({ publishedAt: post.publishedAt!, slug: post.slug })}>
-  <img loading="lazy" src={cover} alt={post.title} />
+  <img
+    src={cover}
+    alt={post.title}
+    loading={priority ? 'eager' : 'lazy'}
+    decoding={priority ? 'sync' : 'async'}
+    fetchpriority={priority ? 'high' : 'auto'}
+  />
   <div class="overlay">
     <div class="title">{post.title}</div>
     <div class="desc">{description ?? post.description ?? ''}</div>
