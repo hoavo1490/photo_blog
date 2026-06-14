@@ -20,13 +20,17 @@ type Card = {
   desc: string;
   r2Key: string | null;
   variantWidths: number[];
+  hasAvif: boolean;
 };
 const cards: Card[] = [];
 for (const p of all) {
   const info = coverByPost.get(p.id);
   if (!info) continue;
   const desc = p.description ?? firstParagraph(p.body) ?? '';
-  cards.push({ post: p, cover: info.url, desc, r2Key: info.r2Key, variantWidths: info.variantWidths });
+  cards.push({
+    post: p, cover: info.url, desc,
+    r2Key: info.r2Key, variantWidths: info.variantWidths, hasAvif: info.hasAvif,
+  });
 }
 
 const byYear = new Map<number, Card[]>();
@@ -55,6 +59,11 @@ const lcpWebpSrcset = latest && latest.r2Key && latest.variantWidths.length > 0
       .map((w) => `${variantUrlForKey(latest.r2Key!, w, env_).replace(/\.jpg$/, '.webp')} ${w}w`)
       .join(', ')
   : undefined;
+const lcpAvifSrcset = latest && latest.r2Key && latest.hasAvif && latest.variantWidths.length > 0
+  ? latest.variantWidths
+      .map((w) => `${variantUrlForKey(latest.r2Key!, w, env_).replace(/\.jpg$/, '.avif')} ${w}w`)
+      .join(', ')
+  : undefined;
 ---
 <BaseLayout
   description={latestDesc || undefined}
@@ -63,6 +72,7 @@ const lcpWebpSrcset = latest && latest.r2Key && latest.variantWidths.length > 0
     src: latest.cover,
     srcset: lcpSrcset,
     webpSrcset: lcpWebpSrcset,
+    avifSrcset: lcpAvifSrcset,
     sizes: lcpSrcset ? lcpSizes : undefined,
   } : undefined}
 >
@@ -83,6 +93,7 @@ const lcpWebpSrcset = latest && latest.r2Key && latest.variantWidths.length > 0
                 variantWidths={c.variantWidths}
                 r2Key={c.r2Key ?? undefined}
                 r2Env={env_}
+                hasAvif={c.hasAvif}
               />
             ))}
           </div>

@@ -88,8 +88,13 @@ export interface ResolvedImage {
    *  (legacy image); fall back to a plain ![alt](url). */
   variantWidths?: number[];
   /** When variantWidths is non-empty, the helper substitutes the
-   *  url's extension to build `.<W>w.jpg` and `.<W>w.webp` URLs. */
+   *  url's extension to build `.<W>w.jpg`, `.<W>w.webp`, and (when
+   *  hasAvif) `.<W>w.avif` URLs. */
   variantUrlBase?: string;
+  /** True when matching `.<W>w.avif` variants exist in R2. Only
+   *  emitted as a `<source type="image/avif">` when this is true,
+   *  otherwise the picture chain stays at WebP -> JPEG. */
+  hasAvif?: boolean;
 }
 
 export interface ImageResolver {
@@ -120,12 +125,21 @@ function buildPictureHtml(resolved: ResolvedImage, alt: string, priority: boolea
   const stripped = base.replace(/\.(jpe?g|png|webp|gif)$/i, '');
   const jpegSet = widths.map((w) => `${stripped}.${w}w.jpg ${w}w`).join(', ');
   const webpSet = widths.map((w) => `${stripped}.${w}w.webp ${w}w`).join(', ');
+  const avifSet = widths.map((w) => `${stripped}.${w}w.avif ${w}w`).join(', ');
   const dim = resolved.width && resolved.height
     ? ` width="${resolved.width}" height="${resolved.height}"`
     : '';
+  // Source order: AVIF (smallest, ~93% browser support) -> WebP (~95%) ->
+  // JPEG <img> fallback. Browsers pick the first <source> whose `type`
+  // they speak, so unsupported formats are skipped without a 404.
+  const sources: string[] = [];
+  if (resolved.hasAvif) {
+    sources.push(`<source type="image/avif" srcset="${avifSet}" sizes="${BODY_IMAGE_SIZES}" />`);
+  }
+  sources.push(`<source type="image/webp" srcset="${webpSet}" sizes="${BODY_IMAGE_SIZES}" />`);
   return [
     '<picture>',
-    `<source type="image/webp" srcset="${webpSet}" sizes="${BODY_IMAGE_SIZES}" />`,
+    ...sources,
     `<img src="${resolved.url}" srcset="${jpegSet}, ${resolved.url} 1600w" sizes="${BODY_IMAGE_SIZES}" alt="${escapeAttr(alt)}"${dim} loading="${loading}" decoding="${decoding}"${fetchAttr} data-pswp-src="${resolved.url}" />`,
     '</picture>',
   ].join('');
@@ -159,7 +173,7 @@ export function rewriteImageTokens(body: string, resolve: ImageResolver): string
 export function firstBodyImageInfo(
   body: string,
   resolve: ImageResolver,
-): { src: string; srcset?: string; webpSrcset?: string; sizes?: string } | null {
+): { src: string; srcset?: string; webpSrcset?: string; avifSrcset?: string; sizes?: string } | null {
   for (const m of body.matchAll(IMAGE_TOKEN_RE)) {
     const id = m[2];
     const resolved = resolve(id);
@@ -172,10 +186,14 @@ export function firstBodyImageInfo(
     const stripped = base.replace(/\.(jpe?g|png|webp|gif)$/i, '');
     const jpegSet = widths.map((w) => `${stripped}.${w}w.jpg ${w}w`).join(', ') + `, ${resolved.url} 1600w`;
     const webpSet = widths.map((w) => `${stripped}.${w}w.webp ${w}w`).join(', ');
+    const avifSet = resolved.hasAvif
+      ? widths.map((w) => `${stripped}.${w}w.avif ${w}w`).join(', ')
+      : undefined;
     return {
       src: resolved.url,
       srcset: jpegSet,
       webpSrcset: webpSet,
+      avifSrcset: avifSet,
       sizes: BODY_IMAGE_SIZES,
     };
   }

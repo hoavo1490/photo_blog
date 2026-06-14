@@ -18,6 +18,7 @@ export interface Image {
   uploadedBy: string | null;
   uploadedAt: Date;
   variantWidths: number[];
+  hasAvif: boolean;
 }
 
 interface ImageRow {
@@ -31,6 +32,7 @@ interface ImageRow {
   uploaded_by: string | null;
   uploaded_at: string | Date;
   variant_widths: number[] | null;
+  has_avif: boolean | null;
 }
 
 function fromRow(r: ImageRow): Image {
@@ -45,10 +47,11 @@ function fromRow(r: ImageRow): Image {
     uploadedBy: r.uploaded_by,
     uploadedAt: new Date(r.uploaded_at as string | Date),
     variantWidths: (r.variant_widths ?? []).map((n) => typeof n === 'string' ? parseInt(n, 10) : n),
+    hasAvif: r.has_avif ?? false,
   };
 }
 
-const SELECT = `id, site_id, r2_key, original_name, size_bytes, width, height, uploaded_by, uploaded_at, variant_widths`;
+const SELECT = `id, site_id, r2_key, original_name, size_bytes, width, height, uploaded_by, uploaded_at, variant_widths, has_avif`;
 
 export interface CreateImageInput {
   siteId: string;

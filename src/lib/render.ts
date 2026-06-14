@@ -30,9 +30,9 @@ export async function buildImageResolver(
   const placeholders = imageIds.map((_, i) => `$${i + 2}`).join(',');
   const rows = await driver.query<{
     id: string; r2_key: string; original_name: string; width: number; height: number;
-    variant_widths: number[] | null;
+    variant_widths: number[] | null; has_avif: boolean | null;
   }>(
-    `SELECT id, r2_key, original_name, width, height, variant_widths
+    `SELECT id, r2_key, original_name, width, height, variant_widths, has_avif
      FROM images
      WHERE site_id = $1 AND id IN (${placeholders})`,
     [siteId, ...imageIds],
@@ -47,6 +47,7 @@ export async function buildImageResolver(
       alt: r.original_name,
       variantWidths: (r.variant_widths ?? []).map((n) => typeof n === 'string' ? parseInt(n, 10) : n),
       variantUrlBase: url,
+      hasAvif: r.has_avif ?? false,
     });
   }
   return (id) => map.get(id) ?? null;
@@ -94,6 +95,7 @@ export interface CoverImageInfo {
   /** Empty when the cover came from a legacy plain URL in the body. */
   r2Key: string | null;
   variantWidths: number[];
+  hasAvif: boolean;
 }
 
 /** Same as coverUrlFor but returns the underlying R2 key and variant
@@ -109,11 +111,12 @@ export async function coverImageFor(
       url: publicUrlForKey(preloadedCover.r2Key, env),
       r2Key: preloadedCover.r2Key,
       variantWidths: preloadedCover.variantWidths ?? [],
+      hasAvif: preloadedCover.hasAvif ?? false,
     };
   }
   if (post.coverImageId) {
-    const rows = await driver.query<{ r2_key: string; variant_widths: number[] | null }>(
-      `SELECT r2_key, variant_widths FROM images WHERE site_id = $1 AND id = $2`,
+    const rows = await driver.query<{ r2_key: string; variant_widths: number[] | null; has_avif: boolean | null }>(
+      `SELECT r2_key, variant_widths, has_avif FROM images WHERE site_id = $1 AND id = $2`,
       [post.siteId, post.coverImageId],
     );
     if (rows[0]) {
@@ -121,13 +124,14 @@ export async function coverImageFor(
         url: publicUrlForKey(rows[0].r2_key, env),
         r2Key: rows[0].r2_key,
         variantWidths: rows[0].variant_widths ?? [],
+        hasAvif: rows[0].has_avif ?? false,
       };
     }
   }
   const token = firstImageToken(post.body);
   if (token) {
-    const rows = await driver.query<{ r2_key: string; variant_widths: number[] | null }>(
-      `SELECT r2_key, variant_widths FROM images WHERE site_id = $1 AND id = $2`,
+    const rows = await driver.query<{ r2_key: string; variant_widths: number[] | null; has_avif: boolean | null }>(
+      `SELECT r2_key, variant_widths, has_avif FROM images WHERE site_id = $1 AND id = $2`,
       [post.siteId, token],
     );
     if (rows[0]) {
@@ -135,11 +139,12 @@ export async function coverImageFor(
         url: publicUrlForKey(rows[0].r2_key, env),
         r2Key: rows[0].r2_key,
         variantWidths: rows[0].variant_widths ?? [],
+        hasAvif: rows[0].has_avif ?? false,
       };
     }
   }
   const url = firstImageUrl(post.body);
-  return url ? { url, r2Key: null, variantWidths: [] } : null;
+  return url ? { url, r2Key: null, variantWidths: [], hasAvif: false } : null;
 }
 
 /** Batch variant of coverImageFor for the homepage / archive use case.
@@ -173,19 +178,19 @@ export async function batchCoverImagesFor(
     }
   }
 
-  let imageById = new Map<string, { r2_key: string; variant_widths: number[] | null }>();
+  let imageById = new Map<string, { r2_key: string; variant_widths: number[] | null; has_avif: boolean | null }>();
   if (wantedIds.size > 0) {
     const ids = [...wantedIds];
     const placeholders = ids.map((_, i) => `$${i + 2}`).join(',');
     const rows = await driver.query<{
-      id: string; r2_key: string; variant_widths: number[] | null;
+      id: string; r2_key: string; variant_widths: number[] | null; has_avif: boolean | null;
     }>(
-      `SELECT id, r2_key, variant_widths
+      `SELECT id, r2_key, variant_widths, has_avif
        FROM images
        WHERE site_id = $1 AND id IN (${placeholders})`,
       [siteId, ...ids],
     );
-    imageById = new Map(rows.map((r) => [r.id, { r2_key: r.r2_key, variant_widths: r.variant_widths }]));
+    imageById = new Map(rows.map((r) => [r.id, { r2_key: r.r2_key, variant_widths: r.variant_widths, has_avif: r.has_avif }]));
   }
 
   for (const p of posts) {
@@ -197,12 +202,13 @@ export async function batchCoverImagesFor(
           url: publicUrlForKey(img.r2_key, env),
           r2Key: img.r2_key,
           variantWidths: img.variant_widths ?? [],
+          hasAvif: img.has_avif ?? false,
         });
         continue;
       }
     }
     const url = firstImageUrl(p.body);
-    out.set(p.id, url ? { url, r2Key: null, variantWidths: [] } : null);
+    out.set(p.id, url ? { url, r2Key: null, variantWidths: [], hasAvif: false } : null);
   }
   return out;
 }

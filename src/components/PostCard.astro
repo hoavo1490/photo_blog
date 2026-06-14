@@ -19,8 +19,10 @@ interface Props {
   r2Key?: string;
   /** R2 origin env so we can resolve variant URLs. */
   r2Env?: { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
+  /** True when matching `.<W>w.avif` variants exist alongside JPEG/WebP. */
+  hasAvif?: boolean;
 }
-const { post, cover, description, priority = false, variantWidths = [], r2Key, r2Env } = Astro.props;
+const { post, cover, description, priority = false, variantWidths = [], r2Key, r2Env, hasAvif = false } = Astro.props;
 
 // Sizes attribute matches the homepage grid:
 //   <= 480px : 1 column → 100vw
@@ -30,20 +32,24 @@ const sizesAttr = '(max-width: 480px) 100vw, (max-width: 800px) 50vw, 250px';
 
 const jpegSrcset: string[] = [];
 const webpSrcset: string[] = [];
+const avifSrcset: string[] = [];
 if (r2Key && r2Env && variantWidths.length > 0) {
   for (const w of variantWidths) {
     const jpeg = variantUrlForKey(r2Key, w, r2Env);
     jpegSrcset.push(`${jpeg} ${w}w`);
     webpSrcset.push(`${jpeg.replace(/\.jpg$/, '.webp')} ${w}w`);
+    if (hasAvif) avifSrcset.push(`${jpeg.replace(/\.jpg$/, '.avif')} ${w}w`);
   }
   jpegSrcset.push(`${cover} 1600w`);
 }
 const jpegSrcsetStr = jpegSrcset.length > 0 ? jpegSrcset.join(', ') : undefined;
 const webpSrcsetStr = webpSrcset.length > 0 ? webpSrcset.join(', ') : undefined;
+const avifSrcsetStr = avifSrcset.length > 0 ? avifSrcset.join(', ') : undefined;
 ---
 <a class="card" href={postUrl({ publishedAt: post.publishedAt!, slug: post.slug })}>
   {webpSrcsetStr ? (
     <picture>
+      {avifSrcsetStr && <source type="image/avif" srcset={avifSrcsetStr} sizes={sizesAttr} />}
       <source type="image/webp" srcset={webpSrcsetStr} sizes={sizesAttr} />
       <img
         src={cover}
