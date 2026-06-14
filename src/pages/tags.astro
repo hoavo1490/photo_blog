@@ -1,13 +1,40 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import * as tags from '../lib/db/tags';
+import { postUrl } from '../lib/post-url';
+import type { SqlDriver } from '../lib/db/driver';
+
+// Mirrors the original Jekyll tags page: a sized/color-graded cloud at
+// the top, and below it a section per tag listing every published post
+// in that tag. Tag-cloud links are anchor jumps (#<slug>) within the
+// same page, not separate routes. The /tags/<slug> route still exists
+// for direct linking / SEO, but on-page tag clicks stay scrolly.
 
 const tenant = Astro.locals.tenant!;
-const driver = Astro.locals.db!;
-const all = await tags.listForSite(driver, { siteId: tenant.id });
+const driver = Astro.locals.db! as SqlDriver;
+
+const all = (await tags.listForSite(driver, { siteId: tenant.id }))
+  .filter((t) => t.publishedCount > 0);
+
+const rows = await driver.query<{
+  tag_id: string; post_slug: string; post_title: string; published_at: string;
+}>(
+  `SELECT pt.tag_id, p.slug AS post_slug, p.title AS post_title, p.published_at
+   FROM post_tags pt
+   JOIN posts p ON p.id = pt.post_id
+   WHERE p.site_id = $1 AND p.status = 'published'
+   ORDER BY p.published_at DESC`,
+  [tenant.id],
+);
+const postsByTag = new Map<string, { slug: string; title: string; publishedAt: Date }[]>();
+for (const r of rows) {
+  const list = postsByTag.get(r.tag_id) ?? [];
+  list.push({ slug: r.post_slug, title: r.post_title, publishedAt: new Date(r.published_at) });
+  postsByTag.set(r.tag_id, list);
+}
+
 const max = Math.max(1, ...all.map((t) => t.publishedCount));
 const min = Math.min(...all.map((t) => t.publishedCount));
-
 function weight(n: number) { return max === min ? 0.5 : (n - min) / (max - min); }
 function lerp(t: number): string {
   const a = [0xf8, 0xe0, 0xe6];
@@ -25,11 +52,31 @@ function lerp(t: number): string {
           const w = weight(t.publishedCount);
           const size = (0.9 + w * 1.1).toFixed(2);
           return (
-            <a href={`/tags/${encodeURIComponent(t.slug)}`} title={`${t.name} (${t.publishedCount})`}
+            <a href={`#${encodeURIComponent(t.slug)}`} title={`${t.name} (${t.publishedCount})`}
               style={`color: ${lerp(w)}; font-size: ${size}em;`}>{t.name}</a>
           );
         })}
       </div>
+
+      <ul class="listing">
+        {all.map((t) => {
+          const list = postsByTag.get(t.id) ?? [];
+          return (
+            <>
+              <li class="listing-seperator" id={t.slug}>{t.name}</li>
+              {list.map((p) => {
+                const dateStr = p.publishedAt.toISOString().slice(0, 10);
+                return (
+                  <li class="listing-item">
+                    <time datetime={dateStr}>{dateStr}</time>{' '}
+                    <a href={postUrl(p)} title={p.title}>{p.title}</a>
+                  </li>
+                );
+              })}
+            </>
+          );
+        })}
+      </ul>
     </section>
   </article>
 </BaseLayout>
