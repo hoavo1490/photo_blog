@@ -70,5 +70,26 @@ if (tagNames.length) jsonLd.keywords = tagNames.join(', ');
 </BaseLayout>
 
 <script>
-  import '../scripts/lightbox';
+  // Lazy-load the lightbox bundle (~20KB + photoswipe) out of the LCP
+  // window. The dynamic import() splits into a separate Vite chunk;
+  // this outer script is tiny. Loads on requestIdleCallback (idle
+  // time after first paint) OR on first interaction with the article,
+  // whichever comes first -- so the lightbox is already initialized
+  // and image wrappers are in place by the time the user clicks.
+  let loaded = false;
+  const load = () => {
+    if (loaded) return;
+    loaded = true;
+    import('../scripts/lightbox');
+  };
+  const article = document.querySelector('article .post');
+  if (article) {
+    const events = ['pointerdown', 'touchstart'] as const;
+    events.forEach((e) => article.addEventListener(e, load, { once: true, passive: true }));
+  }
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(load, { timeout: 3000 });
+  } else {
+    setTimeout(load, 1500);
+  }
 </script>
