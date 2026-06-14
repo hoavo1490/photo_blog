@@ -2,8 +2,9 @@
 import { env } from 'cloudflare:workers';
 import BaseLayout from './BaseLayout.astro';
 import { renderPostBody, coverUrlFor } from '../lib/render';
+import { buildImageResolver } from '../lib/render';
 import * as tagsRepo from '../lib/db/tags';
-import { firstParagraph } from '../lib/markdown';
+import { firstParagraph, firstBodyImageInfo, allImageTokens } from '../lib/markdown';
 import type { Post } from '../lib/db/posts';
 import { marked } from 'marked';
 import { defaultAuthor, defaultSiteName } from '../data/nav';
@@ -17,6 +18,11 @@ const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string }
 
 const rewritten = await renderPostBody(driver, post, env_);
 const rendered = await marked.parse(rewritten);
+
+// Build the same resolver renderPostBody used so we can compute the
+// LCP preload for the first body image without re-doing the work.
+const lcpResolver = await buildImageResolver(driver, post.siteId, allImageTokens(post.body), env_);
+const firstBodyImg = firstBodyImageInfo(post.body, lcpResolver);
 const dateStr = post.publishedAt ? post.publishedAt.toISOString().slice(0, 10) : '';
 
 const cover = await coverUrlFor(driver, post, env_);
@@ -53,6 +59,7 @@ if (tagNames.length) jsonLd.keywords = tagNames.join(', ');
   modifiedAt={post.updatedAt}
   tags={tagNames}
   jsonLd={jsonLd}
+  lcpImage={firstBodyImg ?? undefined}
 >
   <article>
     <section class="title"><h2>{post.title}</h2></section>

@@ -101,21 +101,22 @@ export interface ImageResolver {
  *  mobile it fills the viewport. */
 const BODY_IMAGE_SIZES = '(max-width: 800px) 100vw, 750px';
 
-function buildPictureHtml(resolved: ResolvedImage, alt: string): string {
+function buildPictureHtml(resolved: ResolvedImage, alt: string, priority: boolean): string {
   const widths = resolved.variantWidths ?? [];
   const base = resolved.variantUrlBase;
+  // First in-body image is the LCP candidate: eager + high priority +
+  // sync decode. Everything below the fold gets lazy + async.
+  const loading = priority ? 'eager' : 'lazy';
+  const decoding = priority ? 'sync' : 'async';
+  const fetchAttr = priority ? ' fetchpriority="high"' : '';
+
   if (widths.length === 0 || !base) {
-    // No variants: a plain <img> with whatever dimensions the resolver
-    // could give us. Width/height let the browser reserve layout and
-    // avoid CLS.
     const dim = resolved.width && resolved.height
       ? ` width="${resolved.width}" height="${resolved.height}"`
       : '';
-    return `<img src="${resolved.url}" alt="${escapeAttr(alt)}"${dim} data-pswp-src="${resolved.url}" />`;
+    return `<img src="${resolved.url}" alt="${escapeAttr(alt)}"${dim} loading="${loading}" decoding="${decoding}"${fetchAttr} data-pswp-src="${resolved.url}" />`;
   }
 
-  // Strip .jpg from the base; variants are `<base>.<W>w.jpg` and
-  // `<base>.<W>w.webp`.
   const stripped = base.replace(/\.(jpe?g|png|webp|gif)$/i, '');
   const jpegSet = widths.map((w) => `${stripped}.${w}w.jpg ${w}w`).join(', ');
   const webpSet = widths.map((w) => `${stripped}.${w}w.webp ${w}w`).join(', ');
@@ -125,7 +126,7 @@ function buildPictureHtml(resolved: ResolvedImage, alt: string): string {
   return [
     '<picture>',
     `<source type="image/webp" srcset="${webpSet}" sizes="${BODY_IMAGE_SIZES}" />`,
-    `<img src="${resolved.url}" srcset="${jpegSet}, ${resolved.url} 1600w" sizes="${BODY_IMAGE_SIZES}" alt="${escapeAttr(alt)}"${dim} decoding="async" data-pswp-src="${resolved.url}" />`,
+    `<img src="${resolved.url}" srcset="${jpegSet}, ${resolved.url} 1600w" sizes="${BODY_IMAGE_SIZES}" alt="${escapeAttr(alt)}"${dim} loading="${loading}" decoding="${decoding}"${fetchAttr} data-pswp-src="${resolved.url}" />`,
     '</picture>',
   ].join('');
 }
@@ -136,13 +137,47 @@ function escapeAttr(s: string): string {
 
 /** Replace `![alt](image:<uuid>)` tokens with a responsive <picture>
  *  block (when variants exist) or a plain markdown image (when they
- *  don't). The resulting HTML is passed through marked unchanged.
+ *  don't). The first resolved image is emitted with eager loading and
+ *  high fetchpriority -- it's the LCP candidate -- and every other
+ *  image is lazy-loaded so they don't fight for bandwidth.
  *  Unresolved tokens stay as-is. */
 export function rewriteImageTokens(body: string, resolve: ImageResolver): string {
+  let resolvedCount = 0;
   return body.replace(IMAGE_TOKEN_RE, (whole, alt: string, id: string) => {
     const resolved = resolve(id);
     if (!resolved) return whole;
     const finalAlt = alt || resolved.alt || '';
-    return buildPictureHtml(resolved, finalAlt);
+    const priority = resolvedCount === 0;
+    resolvedCount++;
+    return buildPictureHtml(resolved, finalAlt, priority);
   });
+}
+
+/** Returns LCP-preload info for the first resolved image in the body,
+ *  or null if none. Used by PostLayout to add a <link rel="preload">
+ *  for the first body image. */
+export function firstBodyImageInfo(
+  body: string,
+  resolve: ImageResolver,
+): { src: string; srcset?: string; webpSrcset?: string; sizes?: string } | null {
+  for (const m of body.matchAll(IMAGE_TOKEN_RE)) {
+    const id = m[2];
+    const resolved = resolve(id);
+    if (!resolved) continue;
+    const widths = resolved.variantWidths ?? [];
+    const base = resolved.variantUrlBase;
+    if (widths.length === 0 || !base) {
+      return { src: resolved.url };
+    }
+    const stripped = base.replace(/\.(jpe?g|png|webp|gif)$/i, '');
+    const jpegSet = widths.map((w) => `${stripped}.${w}w.jpg ${w}w`).join(', ') + `, ${resolved.url} 1600w`;
+    const webpSet = widths.map((w) => `${stripped}.${w}w.webp ${w}w`).join(', ');
+    return {
+      src: resolved.url,
+      srcset: jpegSet,
+      webpSrcset: webpSet,
+      sizes: BODY_IMAGE_SIZES,
+    };
+  }
+  return null;
 }
