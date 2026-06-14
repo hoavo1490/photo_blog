@@ -168,24 +168,3 @@ footer {
 
 // Embedded gist
 .gist { font-size: 13px; line-height: 1.6; }
-
-// PhotoSwipe caption: post title under the image, links back to the post.
-.pswp-caption {
-  position: absolute;
-  left: 0; right: 0; bottom: 14px;
-  text-align: center;
-  font-family: #{$label-font};
-  font-size: 0.95em;
-  color: rgba(255, 255, 255, 0.85);
-  pointer-events: none;
-  z-index: 1;
-  a {
-    pointer-events: auto;
-    color: rgba(255, 255, 255, 0.9);
-    text-decoration: none;
-    padding: 4px 10px;
-    background: rgba(0, 0, 0, 0.35);
-    border-radius: 4px;
-    &:hover { color: #fff; background: rgba(0, 0, 0, 0.55); }
-  }
-}
