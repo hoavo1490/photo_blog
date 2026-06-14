@@ -2,8 +2,6 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PostCard from '../components/PostCard.astro';
-import TagChips from '../components/TagChips.astro';
-import { byDateDesc, groupByYear } from '../utils/tags';
 import { firstImage, firstParagraph } from '../utils/extract';
 
 const all = await getCollection('posts');
@@ -27,11 +25,9 @@ for (const c of cards) {
   byYear.set(y, list);
 }
 const years = [...byYear.entries()].sort((a, b) => b[0] - a[0]);
-const allTags = [...new Set(cards.flatMap((c) => c.post.data.tags))].sort();
 ---
 <BaseLayout>
   <div class="home-wrap">
-    <TagChips tags={allTags} />
     <div id="gallery" class="gallery">
       {years.map(([year, list]) => (
         <section class="year-section" data-year={year}>
@@ -46,7 +42,3 @@ const allTags = [...new Set(cards.flatMap((c) => c.post.data.tags))].sort();
     </div>
   </div>
 </BaseLayout>
-
-<script>
-  import '../scripts/home-filter';
-</script>
