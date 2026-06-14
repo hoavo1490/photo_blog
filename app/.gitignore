@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.astro/
+.wrangler/
+.env
+.env.local
+.dev.vars
+.vscode/
+.idea/
+*.log
