@@ -1,6 +1,7 @@
 ---
 import { postUrl } from '../lib/post-url';
 import type { Post } from '../lib/db/posts';
+import { variantUrlForKey } from '../lib/r2/images';
 
 interface Props {
   post: Post;
@@ -10,12 +11,41 @@ interface Props {
    *  fetchpriority=high so the LCP image starts loading immediately
    *  instead of waiting behind lazy-load heuristics. */
   priority?: boolean;
+  /** Variant widths available for this cover image, e.g. [400,800,1200].
+   *  When empty the renderer falls back to a plain <img src>. */
+  variantWidths?: number[];
+  /** Original key, needed to derive variant URLs. Only used when
+   *  variantWidths is non-empty. */
+  r2Key?: string;
+  /** R2 origin env so we can resolve variant URLs. */
+  r2Env?: { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
 }
-const { post, cover, description, priority = false } = Astro.props;
+const { post, cover, description, priority = false, variantWidths = [], r2Key, r2Env } = Astro.props;
+
+// Sizes attribute matches the homepage grid:
+//   <= 480px : 1 column → 100vw
+//   <= 800px : 2 columns → 50vw (with 6px gap; close enough for sizes)
+//   else     : 3 columns → 33vw inside a 750px max wrapper, so ~250px
+const sizesAttr = '(max-width: 480px) 100vw, (max-width: 800px) 50vw, 250px';
+
+const srcsetEntries: string[] = [];
+if (r2Key && r2Env && variantWidths.length > 0) {
+  for (const w of variantWidths) {
+    srcsetEntries.push(`${variantUrlForKey(r2Key, w, r2Env)} ${w}w`);
+  }
+  // Include the original (largest, addressed by the row's r2_key) at
+  // its actual rendered width if known. We don't know it here, so just
+  // add a high "w" descriptor so browsers fall back to it for hi-DPI
+  // wide viewports.
+  srcsetEntries.push(`${cover} 1600w`);
+}
+const srcset = srcsetEntries.length > 0 ? srcsetEntries.join(', ') : undefined;
 ---
 <a class="card" href={postUrl({ publishedAt: post.publishedAt!, slug: post.slug })}>
   <img
     src={cover}
+    srcset={srcset}
+    sizes={srcset ? sizesAttr : undefined}
     alt={post.title}
     loading={priority ? 'eager' : 'lazy'}
     decoding={priority ? 'sync' : 'async'}

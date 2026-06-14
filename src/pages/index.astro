@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PostCard from '../components/PostCard.astro';
 import * as posts from '../lib/db/posts';
-import { coverUrlFor } from '../lib/render';
+import { coverImageFor } from '../lib/render';
 import { firstParagraph } from '../lib/markdown';
 
 const tenant = Astro.locals.tenant!;
@@ -12,13 +12,19 @@ const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string }
 
 const all = await posts.listPublished(driver, { siteId: tenant.id, limit: 200 });
 
-type Card = { post: typeof all[number]; cover: string; desc: string };
+type Card = {
+  post: typeof all[number];
+  cover: string;
+  desc: string;
+  r2Key: string | null;
+  variantWidths: number[];
+};
 const cards: Card[] = [];
 for (const p of all) {
-  const cover = await coverUrlFor(driver, p, env_);
-  if (!cover) continue;
+  const info = await coverImageFor(driver, p, env_);
+  if (!info) continue;
   const desc = p.description ?? firstParagraph(p.body) ?? '';
-  cards.push({ post: p, cover, desc });
+  cards.push({ post: p, cover: info.url, desc, r2Key: info.r2Key, variantWidths: info.variantWidths });
 }
 
 const byYear = new Map<number, Card[]>();
@@ -53,6 +59,9 @@ const latestDesc = cards[0]?.desc;
                 cover={c.cover}
                 description={c.desc}
                 priority={cards[0]?.post.id === c.post.id}
+                variantWidths={c.variantWidths}
+                r2Key={c.r2Key ?? undefined}
+                r2Env={env_}
               />
             ))}
           </div>

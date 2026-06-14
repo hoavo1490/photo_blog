@@ -70,21 +70,59 @@ export async function coverUrlFor(
   env: RenderEnv,
   preloadedCover?: Image,
 ): Promise<string | null> {
-  if (preloadedCover) return publicUrlForKey(preloadedCover.r2Key, env);
+  const info = await coverImageFor(driver, post, env, preloadedCover);
+  return info?.url ?? null;
+}
+
+export interface CoverImageInfo {
+  url: string;
+  /** Empty when the cover came from a legacy plain URL in the body. */
+  r2Key: string | null;
+  variantWidths: number[];
+}
+
+/** Same as coverUrlFor but returns the underlying R2 key and variant
+ *  widths so renderers can emit srcset. */
+export async function coverImageFor(
+  driver: SqlDriver,
+  post: Post,
+  env: RenderEnv,
+  preloadedCover?: Image,
+): Promise<CoverImageInfo | null> {
+  if (preloadedCover) {
+    return {
+      url: publicUrlForKey(preloadedCover.r2Key, env),
+      r2Key: preloadedCover.r2Key,
+      variantWidths: preloadedCover.variantWidths ?? [],
+    };
+  }
   if (post.coverImageId) {
-    const rows = await driver.query<{ r2_key: string }>(
-      `SELECT r2_key FROM images WHERE site_id = $1 AND id = $2`,
+    const rows = await driver.query<{ r2_key: string; variant_widths: number[] | null }>(
+      `SELECT r2_key, variant_widths FROM images WHERE site_id = $1 AND id = $2`,
       [post.siteId, post.coverImageId],
     );
-    if (rows[0]) return publicUrlForKey(rows[0].r2_key, env);
+    if (rows[0]) {
+      return {
+        url: publicUrlForKey(rows[0].r2_key, env),
+        r2Key: rows[0].r2_key,
+        variantWidths: rows[0].variant_widths ?? [],
+      };
+    }
   }
   const token = firstImageToken(post.body);
   if (token) {
-    const rows = await driver.query<{ r2_key: string }>(
-      `SELECT r2_key FROM images WHERE site_id = $1 AND id = $2`,
+    const rows = await driver.query<{ r2_key: string; variant_widths: number[] | null }>(
+      `SELECT r2_key, variant_widths FROM images WHERE site_id = $1 AND id = $2`,
       [post.siteId, token],
     );
-    if (rows[0]) return publicUrlForKey(rows[0].r2_key, env);
+    if (rows[0]) {
+      return {
+        url: publicUrlForKey(rows[0].r2_key, env),
+        r2Key: rows[0].r2_key,
+        variantWidths: rows[0].variant_widths ?? [],
+      };
+    }
   }
-  return firstImageUrl(post.body);
+  const url = firstImageUrl(post.body);
+  return url ? { url, r2Key: null, variantWidths: [] } : null;
 }

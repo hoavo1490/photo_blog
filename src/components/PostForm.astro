@@ -189,22 +189,46 @@ const initialCoverUrl = initial.coverUrl ?? '';
   const mode = form.dataset.mode!;
 
   // ─── image compression + upload ─────────────────────────────────────────
-  async function compressAndUpload(file: File): Promise<{ id: string; url: string } | null> {
-    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    const ratio = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  // Generates multiple sizes from the source image at the same JPEG
+  // quality (0.85) so the browser can pick the right resolution for the
+  // viewport via srcset/sizes without ever serving an oversized file.
+  // Widths larger than the original are skipped (no upscaling).
+  const VARIANT_TARGETS = [400, 800, 1200, 1600];
+
+  async function resizeJpeg(bitmap: ImageBitmap, targetWidth: number, quality = 0.85): Promise<{ blob: Blob; width: number; height: number } | null> {
+    const ratio = Math.min(1, targetWidth / bitmap.width);
     const w = Math.round(bitmap.width * ratio);
     const h = Math.round(bitmap.height * ratio);
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.85));
-    if (!blob) return null;
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', quality));
+    return blob ? { blob, width: w, height: h } : null;
+  }
+
+  async function compressAndUpload(file: File): Promise<{ id: string; url: string } | null> {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+
+    // Generate every target ≤ original width. The largest one becomes
+    // the primary; smaller ones are variants.
+    const wantWidths = VARIANT_TARGETS.filter((w) => w <= bitmap.width);
+    if (wantWidths.length === 0) wantWidths.push(bitmap.width); // tiny source
+    const results = await Promise.all(wantWidths.map((w) => resizeJpeg(bitmap, w)));
+    const variants = results.filter((r): r is NonNullable<typeof r> => r !== null);
+    if (variants.length === 0) return null;
+
+    // Sort largest first; primary is variants[0].
+    variants.sort((a, b) => b.width - a.width);
+    const primary = variants[0];
 
     const fd = new FormData();
-    fd.append('file', blob, file.name.replace(/\.[^.]+$/, '') + '.jpg');
     fd.append('siteId', siteId);
-    fd.append('width', String(w));
-    fd.append('height', String(h));
+    fd.append('width', String(primary.width));
+    fd.append('height', String(primary.height));
+    const stem = file.name.replace(/\.[^.]+$/, '');
+    for (const v of variants) {
+      fd.append(`file_${v.width}`, v.blob, `${stem}.${v.width}w.jpg`);
+    }
 
     const r = await fetch('/admin/api/upload', { method: 'POST', body: fd });
     if (!r.ok) return null;

@@ -96,6 +96,24 @@ export async function uploadImage(
   return { r2Key, publicUrl: publicUrlForKey(r2Key, env) };
 }
 
+/** Variant key for a stored original. Convention: strip the trailing
+ *  image extension and append `.<width>w.jpg`. So an original key
+ *  `<site>/<date>/<hash>-photo.jpg` produces `...-photo.800w.jpg`.
+ *  All variants are re-encoded as JPEG by the client. */
+export function variantKeyForKey(key: string, width: number): string {
+  const stripped = key.replace(/\.(jpe?g|png|webp|gif)$/i, '');
+  return `${stripped}.${width}w.jpg`;
+}
+
+/** Variant URL for a stored original at the given width. */
+export function variantUrlForKey(
+  key: string,
+  width: number,
+  env: { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string },
+): string {
+  return publicUrlForKey(variantKeyForKey(key, width), env);
+}
+
 /** Public URL for a stored key. Prefers R2_PUBLIC_BASE (custom domain),
  *  falls back to R2_DEV_BASE for local dev / *.r2.dev. */
 export function publicUrlForKey(

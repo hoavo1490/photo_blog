@@ -18,8 +18,13 @@ const MIGRATIONS_DIR = join(import.meta.dirname, '..', '..', 'migrations');
  */
 export async function freshDb(): Promise<PgliteDriver> {
   const driver = await createPgliteDriver();
-  const initSql = await readFile(join(MIGRATIONS_DIR, '0001_init.sql'), 'utf8');
-  await driver.applyMigrations(initSql);
+  // Apply every migration file in lexical order, matching production.
+  const { readdir } = await import('node:fs/promises');
+  const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql')).sort();
+  for (const f of files) {
+    const sql = await readFile(join(MIGRATIONS_DIR, f), 'utf8');
+    await driver.applyMigrations(sql);
+  }
   return driver;
 }
 
