@@ -1,14 +1,10 @@
 @use "vars" as *;
 @use "media-queries" as *;
 
-// Foto-style card grid for the homepage.
-
-#content:has(.home-wrap) {
-  width: auto;
-  max-width: 1200px;
-  padding: 0 16px;
-  @include min-screen(800px) { width: auto; }
-}
+// Card grid for the homepage. Sized to match the rest of the site
+// (750px page width) -- 3 cards per row on desktop, 2 on tablet, 1 on
+// phone -- so the gallery doesn't read as a separate page width than
+// the post detail / archive views.
 
 .home-wrap {
   width: 100%;
@@ -16,27 +12,27 @@
 }
 
 .year-section {
-  margin-bottom: 2.5em;
+  margin-bottom: 2em;
 
   &[data-empty="true"] { display: none; }
 
   .section-header-wrapper {
-    margin-bottom: 0.8em;
+    margin-bottom: 0.5em;
   }
 
   .section-title {
     font-family: #{$label-font};
-    font-size: 1.6em;
-    font-weight: 700;
-    color: #333;
+    font-size: 1em;
+    font-weight: 600;
+    color: #999;
     letter-spacing: 0.05em;
   }
 }
 
 .section-images {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
 }
 
 .card {
@@ -96,6 +92,12 @@
     .desc { display: none; }
   }
   .section-images {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@include max-screen(480px) {
+  .section-images {
+    grid-template-columns: 1fr;
   }
 }
