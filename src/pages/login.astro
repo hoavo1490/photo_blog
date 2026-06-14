@@ -4,24 +4,47 @@ import AdminLayout from '../layouts/AdminLayout.astro';
 import { createGitHubOAuth } from '../lib/auth/oauth';
 
 const e = env as unknown as { GITHUB_OAUTH_CLIENT_ID?: string; GITHUB_OAUTH_CLIENT_SECRET?: string };
-const oauth = createGitHubOAuth({
-  clientId: e.GITHUB_OAUTH_CLIENT_ID ?? '',
-  clientSecret: e.GITHUB_OAUTH_CLIENT_SECRET ?? '',
-});
+const clientId = e.GITHUB_OAUTH_CLIENT_ID;
+const clientSecret = e.GITHUB_OAUTH_CLIENT_SECRET;
 
-const next = Astro.url.searchParams.get('next') ?? '/admin';
-const state = btoa(JSON.stringify({ next, n: crypto.randomUUID() }));
-const callback = new URL('/auth/callback', Astro.url).toString();
-const target = oauth.authorizeUrl(state, callback);
+// Fail loudly if the OAuth app isn't configured. Without this guard, the
+// 'Continue with GitHub' button silently 404s at GitHub because the URL
+// has client_id=<empty>.
+const missing: string[] = [];
+if (!clientId) missing.push('GITHUB_OAUTH_CLIENT_ID');
+if (!clientSecret) missing.push('GITHUB_OAUTH_CLIENT_SECRET');
+
+let target: string | null = null;
+if (missing.length === 0) {
+  const oauth = createGitHubOAuth({ clientId: clientId!, clientSecret: clientSecret! });
+  const next = Astro.url.searchParams.get('next') ?? '/admin';
+  const state = btoa(JSON.stringify({ next, n: crypto.randomUUID() }));
+  const callback = new URL('/auth/callback', Astro.url).toString();
+  target = oauth.authorizeUrl(state, callback);
+}
 ---
 <AdminLayout title="sign in">
   <section style="padding: 40px 0; text-align: center;">
     <h2 style="font-size: 22px; font-weight: 600; margin-bottom: 8px;">riovv editor</h2>
-    <p style="color: var(--muted); margin-bottom: 24px;">Sign in with GitHub to write.</p>
-    <a class="primary" href={target} role="button" style="
-      display: inline-flex; align-items: center; gap: 8px;
-      min-height: 44px; padding: 10px 18px;
-      background: #111; color: #fff; border-radius: 999px;
-    ">Continue with GitHub</a>
+    {missing.length === 0 ? (
+      <>
+        <p style="color: var(--muted); margin-bottom: 24px;">Sign in with GitHub to write.</p>
+        <a class="primary" href={target!} role="button" style="
+          display: inline-flex; align-items: center; gap: 8px;
+          min-height: 44px; padding: 10px 18px;
+          background: #111; color: #fff; border-radius: 999px;
+        ">Continue with GitHub</a>
+      </>
+    ) : (
+      <>
+        <p style="color: var(--danger, #c0392b); margin-bottom: 8px;">OAuth not configured.</p>
+        <p style="color: var(--muted); font-size: 14px;">
+          Missing env var{missing.length > 1 ? 's' : ''}: <code>{missing.join(', ')}</code>
+        </p>
+        <p style="color: var(--muted); font-size: 14px; margin-top: 16px;">
+          Set them in the Worker dashboard and redeploy.
+        </p>
+      </>
+    )}
   </section>
 </AdminLayout>
