@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PostCard from '../components/PostCard.astro';
 import * as posts from '../lib/db/posts';
-import { coverImageFor } from '../lib/render';
+import { batchCoverImagesFor } from '../lib/render';
 import { firstParagraph } from '../lib/markdown';
 import { variantUrlForKey } from '../lib/r2/images';
 
@@ -12,6 +12,7 @@ const driver = Astro.locals.db!;
 const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
 
 const all = await posts.listPublished(driver, { siteId: tenant.id, limit: 200 });
+const coverByPost = await batchCoverImagesFor(driver, tenant.id, all, env_);
 
 type Card = {
   post: typeof all[number];
@@ -22,7 +23,7 @@ type Card = {
 };
 const cards: Card[] = [];
 for (const p of all) {
-  const info = await coverImageFor(driver, p, env_);
+  const info = coverByPost.get(p.id);
   if (!info) continue;
   const desc = p.description ?? firstParagraph(p.body) ?? '';
   cards.push({ post: p, cover: info.url, desc, r2Key: info.r2Key, variantWidths: info.variantWidths });

@@ -1,9 +1,15 @@
-/*
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: strict-origin-when-cross-origin
-
-/media/*
-  Cache-Control: public, max-age=31536000, immutable
+# Static asset cache control. CF Workers ASSETS reads this file (same
+# format as CF Pages) and applies the rules to responses it serves.
+#
+# /_astro/* is hashed by Astro -- content hash in the filename means a
+# change always means a new URL, so we can cache for a year and never
+# worry about staleness.
+#
+# /fonts/* is content-stable (rarely changes). If we do swap fonts,
+# we'd bump the filename. Year cache is safe.
 
 /_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/*
   Cache-Control: public, max-age=31536000, immutable

@@ -130,3 +130,68 @@ export async function coverImageFor(
   const url = firstImageUrl(post.body);
   return url ? { url, r2Key: null, variantWidths: [] } : null;
 }
+
+/** Batch variant of coverImageFor for the homepage / archive use case.
+ *  Collects every image id referenced by every post (cover_image_id or
+ *  first body image:<uuid> token), fetches them all in one SQL round
+ *  trip, then resolves each post's cover from the result map.
+ *
+ *  Cuts N+1 queries to 2 -- one listPublished upstream, plus this one
+ *  -- which dominates TTFB on first-paint of the home page. */
+export async function batchCoverImagesFor(
+  driver: SqlDriver,
+  siteId: string,
+  posts: Post[],
+  env: RenderEnv,
+): Promise<Map<string, CoverImageInfo | null>> {
+  const out = new Map<string, CoverImageInfo | null>();
+  const wantedIds = new Set<string>();
+  const lookupPlan = new Map<string, string | null>(); // postId -> imageId or null
+  for (const p of posts) {
+    if (p.coverImageId) {
+      wantedIds.add(p.coverImageId);
+      lookupPlan.set(p.id, p.coverImageId);
+    } else {
+      const tok = firstImageToken(p.body);
+      if (tok) {
+        wantedIds.add(tok);
+        lookupPlan.set(p.id, tok);
+      } else {
+        lookupPlan.set(p.id, null);
+      }
+    }
+  }
+
+  let imageById = new Map<string, { r2_key: string; variant_widths: number[] | null }>();
+  if (wantedIds.size > 0) {
+    const ids = [...wantedIds];
+    const placeholders = ids.map((_, i) => `$${i + 2}`).join(',');
+    const rows = await driver.query<{
+      id: string; r2_key: string; variant_widths: number[] | null;
+    }>(
+      `SELECT id, r2_key, variant_widths
+       FROM images
+       WHERE site_id = $1 AND id IN (${placeholders})`,
+      [siteId, ...ids],
+    );
+    imageById = new Map(rows.map((r) => [r.id, { r2_key: r.r2_key, variant_widths: r.variant_widths }]));
+  }
+
+  for (const p of posts) {
+    const id = lookupPlan.get(p.id);
+    if (id) {
+      const img = imageById.get(id);
+      if (img) {
+        out.set(p.id, {
+          url: publicUrlForKey(img.r2_key, env),
+          r2Key: img.r2_key,
+          variantWidths: img.variant_widths ?? [],
+        });
+        continue;
+      }
+    }
+    const url = firstImageUrl(p.body);
+    out.set(p.id, url ? { url, r2Key: null, variantWidths: [] } : null);
+  }
+  return out;
+}
