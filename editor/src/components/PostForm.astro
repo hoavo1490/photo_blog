@@ -1,5 +1,6 @@
 ---
 import { newGuid } from '../lib/post';
+import { tenant } from '../lib/config';
 
 interface Props {
   mode: 'new' | 'edit';
@@ -18,6 +19,12 @@ interface Props {
 const { mode, initial } = Astro.props;
 const today = new Date().toISOString().slice(0, 10);
 const guid = initial.guid ?? newGuid();
+
+// Tenant info passed to the client so preview can rewrite /media/ paths
+// to GitHub raw URLs (the editor at editor.riovv.com doesn't serve /media/).
+const env = (Astro.locals as any).runtime?.env ?? process.env;
+const t = tenant(env);
+const rawBase = `https://raw.githubusercontent.com/${t.owner}/${t.repo}/${t.branch}/public`;
 ---
 <form id="post-form" method="post" action="/api/save">
   <input type="hidden" name="mode" value={mode} />
@@ -45,38 +52,7 @@ const guid = initial.guid ?? newGuid();
     <input name="cover" value={initial.cover ?? ''} placeholder="/media/files/2026/06/14/foo.jpg" />
   </label>
 
-  <div style="margin-bottom: 8px;">
-    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-      <label style="
-        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-        min-height: 48px; padding: 0 20px;
-        border: 1px solid var(--border); border-radius: 999px;
-        cursor: pointer; background: var(--bg-elev);
-        font-weight: 500;
-        flex: 1; min-width: 140px; max-width: 240px;
-      ">
-        <span aria-hidden="true">📷</span>
-        <span>add photo</span>
-        <input id="image-picker" type="file" accept="image/*" multiple style="display: none;" />
-      </label>
-      <label style="
-        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-        min-height: 48px; padding: 0 20px;
-        border: 1px solid var(--border); border-radius: 999px;
-        cursor: pointer; background: var(--bg-elev);
-      ">
-        <span aria-hidden="true">📸</span>
-        <span>take photo</span>
-        <input id="camera-picker" type="file" accept="image/*" capture="environment" style="display: none;" />
-      </label>
-    </div>
-    <div id="image-status" style="
-      font-size: 13px; color: var(--muted); margin-top: 8px;
-      min-height: 1.4em;
-    "></div>
-  </div>
-
-  <div style="margin-bottom: 14px;">
+  <div style="margin-bottom: 14px;" data-raw-base={rawBase}>
     <div style="font-size: 13px; color: var(--muted); margin-bottom: 6px;">body</div>
 
     <div class="editor-tabs" role="tablist" style="
@@ -94,6 +70,15 @@ const guid = initial.guid ?? newGuid();
         background: var(--bg-elev);
         border: 1px solid var(--border); border-radius: 8px;
       ">
+        <label class="tb photo" title="add photo (camera, library, or files)" style="
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 0 12px; cursor: pointer;
+        ">
+          <span aria-hidden="true">📷</span>
+          <span>photo</span>
+          <input id="image-picker" type="file" accept="image/*" multiple style="display: none;" />
+        </label>
+        <span class="tb-sep"></span>
         <button type="button" class="tb" data-cmd="bold" title="bold (⌘B)"><b>B</b></button>
         <button type="button" class="tb" data-cmd="italic" title="italic (⌘I)"><i>I</i></button>
         <button type="button" class="tb" data-cmd="h2" title="heading">H</button>
@@ -104,6 +89,10 @@ const guid = initial.guid ?? newGuid();
         <button type="button" class="tb" data-cmd="code" title="inline code">{`</>`}</button>
         <button type="button" class="tb" data-cmd="hr" title="divider">—</button>
       </div>
+      <div id="image-status" style="
+        font-size: 13px; color: var(--muted); margin: -2px 0 6px;
+        min-height: 1.4em;
+      "></div>
       <textarea
         id="body-area"
         name="body"
@@ -158,6 +147,15 @@ const guid = initial.guid ?? newGuid();
   }
   .toolbar .tb:hover { background: rgba(0,0,0,0.05); }
   .toolbar .tb:active { background: rgba(0,0,0,0.1); }
+  .toolbar .tb.photo {
+    font-weight: 500;
+    background: rgba(0,0,0,0.04);
+  }
+  .toolbar .tb.photo:hover { background: rgba(0,0,0,0.08); }
+  .toolbar .tb-sep {
+    width: 1px; align-self: stretch; margin: 2px 4px;
+    background: var(--border);
+  }
 
   .preview {
     padding: 16px 18px;
@@ -207,15 +205,15 @@ const guid = initial.guid ?? newGuid();
 
   const form = document.getElementById('post-form') as HTMLFormElement;
   const picker = document.getElementById('image-picker') as HTMLInputElement;
-  const cameraPicker = document.getElementById('camera-picker') as HTMLInputElement;
   const status = document.getElementById('image-status') as HTMLElement;
   const body = document.getElementById('body-area') as HTMLTextAreaElement;
   const writePane = document.getElementById('write-pane') as HTMLElement;
   const previewPane = document.getElementById('preview-pane') as HTMLElement;
   const tabs = document.querySelectorAll<HTMLButtonElement>('.editor-tabs .tab');
-  const tbButtons = document.querySelectorAll<HTMLButtonElement>('.toolbar .tb');
+  const tbButtons = document.querySelectorAll<HTMLButtonElement>('.toolbar button.tb');
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
   const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement | null;
+  const rawBase = (previewPane.parentElement as HTMLElement).dataset.rawBase ?? '';
 
   // Track IME composition so we don't process pastes mid-composition.
   let isComposing = false;
@@ -223,6 +221,17 @@ const guid = initial.guid ?? newGuid();
   body.addEventListener('compositionend', () => { isComposing = false; });
 
   // -------- Tabs (write / preview) --------
+  function rewriteForPreview(html: string): string {
+    if (!rawBase) return html;
+    // Rewrite root-relative /media/... and /-prefixed asset paths to GitHub
+    // raw URLs so preview shows actual image content. Skips anchors, mailto,
+    // and absolute URLs.
+    return html.replace(/(src|href)="(\/[^"]*)"/g, (m, attr, path) => {
+      if (path.startsWith('//')) return m;
+      return `${attr}="${rawBase}${path}"`;
+    });
+  }
+
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.tab!;
@@ -231,7 +240,8 @@ const guid = initial.guid ?? newGuid();
         writePane.style.display = '';
         previewPane.style.display = 'none';
       } else {
-        previewPane.innerHTML = String(marked.parse(body.value || '*nothing yet*'));
+        const rendered = String(marked.parse(body.value || '*nothing yet*'));
+        previewPane.innerHTML = rewriteForPreview(rendered);
         previewPane.style.display = '';
         writePane.style.display = 'none';
       }
@@ -379,7 +389,6 @@ const guid = initial.guid ?? newGuid();
     }
   }
   picker?.addEventListener('change', () => handlePicker(picker));
-  cameraPicker?.addEventListener('change', () => handlePicker(cameraPicker));
 
   body.addEventListener('paste', (e) => {
     if (isComposing) return;
