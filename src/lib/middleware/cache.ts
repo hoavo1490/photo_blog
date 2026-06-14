@@ -67,7 +67,15 @@ export async function readFromCache(
     search: new URL(input.request.url).search,
   });
   const cached = await cache.match(new Request(url));
-  return cached ?? null;
+  if (!cached) return null;
+  // cache.match returns a Response with immutable headers. Astro's
+  // prepareResponse tries to set content-type etc., which throws on an
+  // immutable response. Rebuild a fresh Response so headers are writable.
+  return new Response(cached.body, {
+    status: cached.status,
+    statusText: cached.statusText,
+    headers: new Headers(cached.headers),
+  });
 }
 
 export interface WriteToCacheInput {
