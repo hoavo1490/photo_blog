@@ -1,19 +1,18 @@
 ---
-import type { CollectionEntry } from 'astro:content';
-import { postUrl } from '../utils/post-url';
+import { postUrl } from '../lib/post-url';
+import type { Post } from '../lib/db/posts';
 
 interface Props {
-  post: CollectionEntry<'posts'>;
+  post: Post;
   cover: string;
-  desc?: string;
+  description?: string | null;
 }
-const { post, cover, desc } = Astro.props;
-const tagsAttr = post.data.tags.join(' ');
+const { post, cover, description } = Astro.props;
 ---
-<a class="card" href={postUrl(post)} data-tags={tagsAttr}>
-  <img loading="lazy" src={cover} alt={post.data.title} />
+<a class="card" href={postUrl({ publishedAt: post.publishedAt!, slug: post.slug })}>
+  <img loading="lazy" src={cover} alt={post.title} />
   <div class="overlay">
-    <div class="title">{post.data.title}</div>
-    <div class="desc">{desc ?? post.data.description ?? ''}</div>
+    <div class="title">{post.title}</div>
+    <div class="desc">{description ?? post.description ?? ''}</div>
   </div>
 </a>

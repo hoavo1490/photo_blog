@@ -6,11 +6,7 @@ const { title, description } = Astro.props;
 ---
 <BaseLayout title={title} description={description}>
   <article>
-    <section class="title">
-      <h2>{title}</h2>
-    </section>
-    <section class="post">
-      <slot />
-    </section>
+    <section class="title"><h2>{title}</h2></section>
+    <section class="post"><slot /></section>
   </article>
 </BaseLayout>

@@ -1,5 +1,6 @@
 ---
-import { nav, siteName } from '../data/nav';
+import { nav, defaultSiteName } from '../data/nav';
+const siteName = Astro.locals.tenant?.name ?? defaultSiteName;
 ---
 <header class="site-header">
   <div class="site-title">

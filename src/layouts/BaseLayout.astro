@@ -1,7 +1,7 @@
 ---
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
-import { siteName, author } from '../data/nav';
+import { defaultSiteName, defaultAuthor } from '../data/nav';
 import '../styles/global.scss';
 
 interface Props {
@@ -10,22 +10,21 @@ interface Props {
 }
 
 const { title, description } = Astro.props;
+const siteName = Astro.locals.tenant?.name ?? defaultSiteName;
 const pageTitle = title ?? siteName;
 ---
 <!DOCTYPE html>
-<html lang="en-us">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="author" content={author} />
+    <meta name="author" content={defaultAuthor} />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     {description && <meta name="description" content={description} />}
     <title>{pageTitle}</title>
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="alternate" type="application/rss+xml" title={siteName} href="/atom.xml" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
-    <link rel="stylesheet" href="/media/fonts/telex-regular.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Ubuntu:300" />
-    <link rel="stylesheet" href="https://code.cdn.mozilla.net/fonts/fira.css" />
   </head>
   <body>
     <div id="main" role="main">

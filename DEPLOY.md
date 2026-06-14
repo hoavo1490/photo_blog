@@ -20,7 +20,6 @@ editor live in the same Worker; the middleware routes by hostname.
    ```
 3. Apply the schema:
    ```bash
-   cd app
    DATABASE_URL='<paste from step 2>' node scripts/migrate.mjs
    ```
 4. Seed Rio's user + site (idempotent):
@@ -56,7 +55,7 @@ Connect this repo to Workers Builds via the dashboard:
    - Framework preset: **Astro**
    - Build command: `pnpm build`
    - Build output directory: `dist`
-   - **Root directory: `app`**
+   - Root directory: `/` (repo root)
 5. Custom domains:
    - Add `riovv.com`
    - Add `admin.riovv.com`
@@ -104,7 +103,6 @@ After the first deploy succeeds:
 ## Local development
 
 ```bash
-cd app
 pnpm install
 pnpm dev   # workerd on http://localhost:4321
 ```
@@ -120,12 +118,14 @@ PGLite is in-memory; no external DB needed for tests.
 
 ## Rollback
 
-The previous Jekyll-era code (`blog/`, `editor/` directories at repo root)
-is still present until Phase 9 cleanup. To revert:
+The previous Jekyll-era and Astro-5-with-GitHub-as-database states are
+in branches:
 
-1. CF Pages → riovv-app → Pause Deployments
-2. Re-point DNS to whatever served the previous version
-3. Old branch `jekyll-final` has the pre-rewrite state if needed
+- `jekyll-final` — the pre-rewrite Jekyll snapshot
+- earlier commits on `main` — the Astro 5 + GitHub-API editor era
+
+To revert: CF dashboard → Pause Deployments, then `git revert` or
+re-point DNS / re-deploy from an earlier commit.
 
 ## Costs at small scale
 

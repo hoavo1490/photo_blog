@@ -1,31 +1,15 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { getCollection } from 'astro:content';
-import { byDateDesc } from '../utils/tags';
-import { postUrl } from '../utils/post-url';
+import * as tags from '../lib/db/tags';
 
-const posts = (await getCollection('posts')).sort(byDateDesc);
+const tenant = Astro.locals.tenant!;
+const driver = Astro.locals.db!;
+const all = await tags.listForSite(driver, { siteId: tenant.id });
+const max = Math.max(1, ...all.map((t) => t.publishedCount));
+const min = Math.min(...all.map((t) => t.publishedCount));
 
-const byTag = new Map<string, typeof posts>();
-for (const p of posts) {
-  for (const t of p.data.tags) {
-    const list = byTag.get(t) ?? [];
-    list.push(p);
-    byTag.set(t, list);
-  }
-}
-
-const tags = [...byTag.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-const counts = tags.map(([t, list]) => [t, list.length] as const);
-const max = Math.max(1, ...counts.map(([, n]) => n));
-const min = Math.min(...counts.map(([, n]) => n));
-
-// Map count -> color and font-size for the cloud.
-function weight(n: number) {
-  return max === min ? 0.5 : (n - min) / (max - min);
-}
-function lerpColor(t: number): string {
-  // #f8e0e6 -> #ff3333
+function weight(n: number) { return max === min ? 0.5 : (n - min) / (max - min); }
+function lerp(t: number): string {
   const a = [0xf8, 0xe0, 0xe6];
   const b = [0xff, 0x33, 0x33];
   const c = a.map((x, i) => Math.round(x + (b[i] - x) * t));
@@ -37,35 +21,15 @@ function lerpColor(t: number): string {
     <section class="title"><h2>tags</h2></section>
     <section class="post">
       <div id="tag_cloud">
-        {tags.map(([tag, list]) => {
-          const w = weight(list.length);
-          const size = (0.9 + w * 1.1).toFixed(2);   // 0.9em → 2.0em
+        {all.map((t) => {
+          const w = weight(t.publishedCount);
+          const size = (0.9 + w * 1.1).toFixed(2);
           return (
-            <a
-              href={`#${encodeURIComponent(tag)}`}
-              title={`${tag} (${list.length})`}
-              style={`color: ${lerpColor(w)}; font-size: ${size}em;`}
-            >{tag}</a>
+            <a href={`/tags/${encodeURIComponent(t.slug)}.html`} title={`${t.name} (${t.publishedCount})`}
+              style={`color: ${lerp(w)}; font-size: ${size}em;`}>{t.name}</a>
           );
         })}
       </div>
-
-      <ul class="listing">
-        {tags.map(([tag, list]) => (
-          <>
-            <li class="listing-seperator" id={tag}>{tag}</li>
-            {list.map((p) => {
-              const dateStr = p.data.date.toISOString().slice(0, 10);
-              return (
-                <li class="listing-item">
-                  <time datetime={dateStr}>{dateStr}</time>{' '}
-                  <a href={postUrl(p)} title={p.data.title}>{p.data.title}</a>
-                </li>
-              );
-            })}
-          </>
-        ))}
-      </ul>
     </section>
   </article>
 </BaseLayout>

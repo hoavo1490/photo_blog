@@ -1,48 +1,27 @@
 ---
+import { env } from 'cloudflare:workers';
 import BaseLayout from './BaseLayout.astro';
-import { getCollection } from 'astro:content';
-import { adjacentPosts } from '../utils/adjacent';
-import type { CollectionEntry } from 'astro:content';
+import { renderPostBody } from '../lib/render';
+import type { Post } from '../lib/db/posts';
+import { marked } from 'marked';
 
-interface Props { post: CollectionEntry<'posts'> }
+interface Props { post: Post }
 const { post } = Astro.props;
 
-const all = await getCollection('posts');
-const { previous, next } = adjacentPosts(all, post);
-const dateStr = post.data.date.toISOString().slice(0, 10);
+const driver = Astro.locals.db!;
+const rewritten = await renderPostBody(driver, post, env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string });
+const rendered = await marked.parse(rewritten);
+const dateStr = post.publishedAt ? post.publishedAt.toISOString().slice(0, 10) : '';
 ---
-<BaseLayout title={post.data.title} description={post.data.description}>
+<BaseLayout title={post.title} description={post.description ?? undefined}>
   <article>
-    <section class="title">
-      <h2>{post.data.title}</h2>
-    </section>
+    <section class="title"><h2>{post.title}</h2></section>
     <section class="meta">
       <span class="time">
         <time datetime={dateStr}>{dateStr}</time>
       </span>
-      {post.data.tags.length > 0 && (
-        <span class="tags">
-          {post.data.tags.map((tag) => (
-            <a href={`/tags.html#${encodeURIComponent(tag)}`} title={tag}>#{tag}</a>
-          ))}
-        </span>
-      )}
     </section>
-    <section class="post">
-      <slot />
-    </section>
-    <div class="divider">
-      <span>
-        {previous
-          ? <a href={previous.url} title={previous.title}><i class="fa fa-chevron-left"></i></a>
-          : <i class="fa fa-circle"></i>}
-      </span>
-      <span>
-        {next
-          ? <a href={next.url} title={next.title}><i class="fa fa-chevron-right"></i></a>
-          : <i class="fa fa-circle"></i>}
-      </span>
-    </div>
+    <section class="post" set:html={rendered}></section>
   </article>
 </BaseLayout>
 

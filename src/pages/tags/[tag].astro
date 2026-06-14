@@ -1,38 +1,42 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { getCollection } from 'astro:content';
-import { byDateDesc } from '../../utils/tags';
-import { postUrl } from '../../utils/post-url';
+import * as tagsRepo from '../../lib/db/tags';
+import { postUrl } from '../../lib/post-url';
+import type { SqlDriver } from '../../lib/db/driver';
 
-export async function getStaticPaths() {
-  const posts = await getCollection('posts');
-  const byTag = new Map<string, typeof posts>();
-  for (const p of posts) {
-    for (const t of p.data.tags) {
-      const list = byTag.get(t) ?? [];
-      list.push(p);
-      byTag.set(t, list);
-    }
-  }
-  return [...byTag.entries()].map(([tag, list]) => ({
-    params: { tag },
-    props: { tag, posts: list.sort(byDateDesc) },
-  }));
+const tenant = Astro.locals.tenant!;
+const driver = Astro.locals.db!;
+const tagSlug = Astro.params.tag!;
+
+const tag = await tagsRepo.findBySlug(driver, { siteId: tenant.id, slug: tagSlug });
+if (!tag) {
+  return new Response('Tag not found', { status: 404 });
 }
 
-const { tag, posts } = Astro.props;
+// Inline query for tag-scoped published posts (small one-off so we don't
+// need a new repo function yet).
+const rows = await (driver as SqlDriver).query<{
+  slug: string; title: string; published_at: string;
+}>(
+  `SELECT p.slug, p.title, p.published_at
+   FROM posts p JOIN post_tags pt ON pt.post_id = p.id
+   WHERE p.site_id = $1 AND pt.tag_id = $2 AND p.status = 'published'
+   ORDER BY p.published_at DESC`,
+  [tenant.id, tag.id],
+);
+const posts = rows.map((r) => ({ slug: r.slug, title: r.title, publishedAt: new Date(r.published_at) }));
 ---
-<BaseLayout title={`#${tag}`}>
+<BaseLayout title={`#${tag.name}`}>
   <article>
-    <section class="title"><h2>#{tag}</h2></section>
+    <section class="title"><h2>#{tag.name}</h2></section>
     <section class="post">
       <ul class="listing">
-        {posts.map((p: any) => {
-          const dateStr = p.data.date.toISOString().slice(0, 10);
+        {posts.map((p) => {
+          const dateStr = p.publishedAt.toISOString().slice(0, 10);
           return (
             <li class="listing-item">
               <time datetime={dateStr}>{dateStr}</time>{' '}
-              <a href={postUrl(p)} title={p.data.title}>{p.data.title}</a>
+              <a href={postUrl(p)} title={p.title}>{p.title}</a>
             </li>
           );
         })}

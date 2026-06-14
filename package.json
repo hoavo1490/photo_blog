@@ -1,28 +1,40 @@
 {
-  "name": "lhzhang-blog",
+  "name": "riovv-app",
   "type": "module",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "astro dev",
-    "start": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "normalize-posts": "node scripts/normalize-posts.mjs"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run --project unit",
+    "test:workers": "vitest run --project workers",
+    "typecheck": "astro check && tsc --noEmit"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "^13.7.0",
     "@astrojs/rss": "^4.0.0",
     "@astrojs/sitemap": "^3.2.0",
-    "astro": "^5.0.0",
+    "@neondatabase/serverless": "^1.0.0",
+    "astro": "^6.0.0",
+    "gray-matter": "^4.0.3",
+    "marked": "^14.0.0",
     "mdast-util-to-string": "^4.0.0",
     "photoswipe": "^5.4.4",
     "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.0",
+    "@cloudflare/vitest-pool-workers": "^0.16.0",
+    "@cloudflare/workers-types": "^4.20251110.0",
+    "@electric-sql/pglite": "^0.5.0",
     "@types/node": "^22.0.0",
-    "gray-matter": "^4.0.3",
     "sass": "^1.80.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.0.0"
   }
 }
