@@ -1,4 +1,5 @@
 import PhotoSwipeLightbox from 'photoswipe/lightbox';
+import PhotoSwipe from 'photoswipe';
 import 'photoswipe/style.css';
 
 const root = document.querySelector<HTMLElement>('article .post');
@@ -35,7 +36,7 @@ if (root) {
     const lightbox = new PhotoSwipeLightbox({
       gallery: 'article .post',
       children: 'a[data-pswp-src]',
-      pswpModule: () => import('photoswipe'),
+      pswpModule: PhotoSwipe,
       showHideAnimationType: 'fade',
     });
     lightbox.init();
