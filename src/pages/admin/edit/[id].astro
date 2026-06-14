@@ -1,8 +1,10 @@
 ---
+import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import PostForm from '../../../components/PostForm.astro';
 import * as posts from '../../../lib/db/posts';
 import type { SqlDriver } from '../../../lib/db/driver';
+import { publicUrlForKey } from '../../../lib/r2/images';
 
 const session = Astro.locals.session;
 if (!session) return Astro.redirect('/login');
@@ -26,7 +28,22 @@ const tagRows = await driver.query<{ name: string }>(
   [postId],
 );
 const tagNames = tagRows.map((r) => r.name);
+
+// Resolve current cover URL (if any) so the editor can show a thumbnail.
+let coverUrl: string | null = null;
+if (post.coverImageId) {
+  const rows = await driver.query<{ r2_key: string }>(
+    `SELECT r2_key FROM images WHERE site_id = $1 AND id = $2`,
+    [siteId, post.coverImageId],
+  );
+  if (rows[0]) {
+    coverUrl = publicUrlForKey(
+      rows[0].r2_key,
+      env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string },
+    );
+  }
+}
 ---
 <AdminLayout title={post.title || 'edit'}>
-  <PostForm mode="edit" siteId={siteId} initial={{ ...post, tagNames }} />
+  <PostForm mode="edit" siteId={siteId} initial={{ ...post, tagNames, coverUrl }} />
 </AdminLayout>

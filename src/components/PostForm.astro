@@ -4,45 +4,82 @@ import type { Post } from '../lib/db/posts';
 interface Props {
   mode: 'new' | 'edit';
   siteId: string;
-  initial: Partial<Post> & { tagNames?: string[] };
+  initial: Partial<Post> & { tagNames?: string[]; coverUrl?: string | null };
 }
 const { mode, siteId, initial } = Astro.props;
 const today = new Date().toISOString().slice(0, 10);
+const initialCoverId = initial.coverImageId ?? '';
+const initialCoverUrl = initial.coverUrl ?? '';
 ---
 <form id="post-form" data-mode={mode} data-site-id={siteId} data-post-id={initial.id ?? ''}>
   <label style="display: block; margin-bottom: 14px;">
-    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">title</div>
+    <div class="field-label">title</div>
     <input name="title" required value={initial.title ?? ''} placeholder="post title" />
   </label>
 
   <label style="display: block; margin-bottom: 14px;">
-    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">slug</div>
+    <div class="field-label">slug</div>
     <input name="slug" value={initial.slug ?? ''} placeholder="auto from title" />
   </label>
 
   <label style="display: block; margin-bottom: 14px;">
-    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">date</div>
+    <div class="field-label">date</div>
     <input name="date" type="date"
       value={initial.publishedAt ? initial.publishedAt.toISOString().slice(0, 10) : today} />
   </label>
 
   <label style="display: block; margin-bottom: 14px;">
-    <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">tags (comma-separated)</div>
+    <div class="field-label">tags (comma-separated)</div>
     <input name="tags" value={(initial.tagNames ?? []).join(', ')} placeholder="photography, leica" />
   </label>
 
+  <div style="margin-bottom: 18px;">
+    <div class="field-label">cover photo</div>
+    <input id="cover-image-id" name="coverImageId" type="hidden" value={initialCoverId} />
+    <div id="cover-row" data-has-cover={initialCoverUrl ? 'true' : 'false'}>
+      <div id="cover-thumb-wrap" style={initialCoverUrl ? '' : 'display:none;'}>
+        <img id="cover-thumb" src={initialCoverUrl} alt="cover" />
+        <button type="button" id="cover-remove" class="cover-remove-btn" aria-label="remove cover">×</button>
+      </div>
+      <label class="cover-upload-btn">
+        <span id="cover-upload-text">{initialCoverUrl ? 'replace' : '+ choose cover'}</span>
+        <input id="cover-picker" type="file" accept="image/*" style="display:none;" />
+      </label>
+    </div>
+    <div id="cover-status" class="upload-status"></div>
+  </div>
+
   <div style="margin-bottom: 14px;">
-    <div style="font-size: 13px; color: var(--muted); margin-bottom: 6px;">body</div>
-    <div class="toolbar" style="display: flex; gap: 4px; padding: 6px; margin-bottom: 6px;
-        background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px;">
-      <label style="display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; cursor: pointer;">
+    <div class="field-label">body</div>
+
+    <div class="tabs">
+      <button type="button" class="tab active" data-tab="write">write</button>
+      <button type="button" class="tab" data-tab="preview">preview</button>
+    </div>
+
+    <div class="toolbar" id="md-toolbar">
+      <button type="button" data-md="bold" title="bold (Cmd+B)"><b>B</b></button>
+      <button type="button" data-md="italic" title="italic (Cmd+I)"><i>I</i></button>
+      <button type="button" data-md="h2" title="heading 2">H2</button>
+      <button type="button" data-md="h3" title="heading 3">H3</button>
+      <button type="button" data-md="link" title="link">link</button>
+      <button type="button" data-md="list" title="bullet list">• list</button>
+      <button type="button" data-md="quote" title="quote">&gt; quote</button>
+      <span class="toolbar-spacer"></span>
+      <label class="toolbar-photo">
         <span>📷 photo</span>
         <input id="image-picker" type="file" accept="image/*" multiple style="display: none;" />
       </label>
     </div>
-    <div id="image-status" style="font-size: 13px; color: var(--muted); margin: -2px 0 6px; min-height: 1.4em;"></div>
+
+    <div id="image-status" class="upload-status"></div>
+
     <textarea id="body-area" name="body" rows="14"
-      placeholder="write here…" style="min-height: 320px;">{initial.body ?? ''}</textarea>
+      placeholder="write here…" style="min-height: 360px;">{initial.body ?? ''}</textarea>
+
+    <div id="preview-area" class="preview-area" style="display:none;">
+      <div class="preview-placeholder">nothing to preview yet…</div>
+    </div>
   </div>
 
   <div class="save-bar">
@@ -56,27 +93,103 @@ const today = new Date().toISOString().slice(0, 10);
   </div>
 </form>
 
+<style>
+  .field-label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .upload-status { font-size: 13px; color: var(--muted); margin: 4px 0 0; min-height: 1.4em; }
+
+  #cover-row {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  #cover-thumb-wrap {
+    position: relative; width: 88px; height: 88px;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    background: var(--bg-elev);
+  }
+  #cover-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cover-remove-btn {
+    position: absolute; top: 4px; right: 4px;
+    width: 22px; height: 22px; min-height: 0; padding: 0;
+    border-radius: 50%; line-height: 1;
+    background: rgba(0,0,0,0.7); color: #fff; border: none;
+    font-size: 16px; cursor: pointer;
+  }
+  .cover-upload-btn {
+    display: inline-flex; align-items: center; padding: 10px 14px;
+    border: 1px dashed var(--border); border-radius: 8px;
+    background: var(--bg-elev); cursor: pointer; font-size: 14px;
+    color: var(--muted);
+  }
+
+  .tabs { display: flex; gap: 0; margin-bottom: 6px; }
+  .tab {
+    flex: 0 0 auto; min-height: 36px; padding: 6px 14px;
+    border: 1px solid var(--border); background: transparent;
+    border-radius: 0; font-size: 14px;
+  }
+  .tab:first-child { border-radius: 8px 0 0 8px; }
+  .tab:last-child  { border-radius: 0 8px 8px 0; border-left: none; }
+  .tab.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+
+  .toolbar {
+    display: flex; gap: 4px; flex-wrap: wrap; padding: 6px;
+    background: var(--bg-elev); border: 1px solid var(--border);
+    border-radius: 8px; margin-bottom: 6px; align-items: center;
+  }
+  .toolbar > button {
+    min-height: 36px; padding: 4px 10px; font-size: 13px;
+    border-radius: 6px; border: 1px solid transparent;
+  }
+  .toolbar > button:hover { border-color: var(--border); }
+  .toolbar-spacer { flex: 1; }
+  .toolbar-photo {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
+    cursor: pointer; border-radius: 6px; min-height: 36px;
+    border: 1px solid var(--border); background: var(--bg-elev);
+    font-size: 13px;
+  }
+  .toolbar-photo:hover { background: #f0f0f0; }
+
+  .preview-area {
+    min-height: 360px; padding: 14px 16px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border); border-radius: 8px;
+    line-height: 1.6;
+  }
+  .preview-area img { max-width: 100%; height: auto; border-radius: 4px; }
+  .preview-area h2 { font-size: 22px; margin: 16px 0 8px; }
+  .preview-area h3 { font-size: 18px; margin: 14px 0 6px; }
+  .preview-area p  { margin: 8px 0; }
+  .preview-area blockquote {
+    margin: 8px 0; padding: 4px 12px; border-left: 3px solid var(--border);
+    color: var(--muted);
+  }
+  .preview-placeholder { color: var(--muted); font-size: 14px; }
+</style>
+
 <script>
   const form = document.getElementById('post-form') as HTMLFormElement;
   const picker = document.getElementById('image-picker') as HTMLInputElement;
   const status = document.getElementById('image-status') as HTMLElement;
   const body = document.getElementById('body-area') as HTMLTextAreaElement;
+  const previewArea = document.getElementById('preview-area') as HTMLElement;
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
   const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement | null;
+  const toolbar = document.getElementById('md-toolbar') as HTMLElement;
+  const coverPicker = document.getElementById('cover-picker') as HTMLInputElement;
+  const coverThumbWrap = document.getElementById('cover-thumb-wrap') as HTMLElement;
+  const coverThumb = document.getElementById('cover-thumb') as HTMLImageElement;
+  const coverRemove = document.getElementById('cover-remove') as HTMLButtonElement;
+  const coverIdInput = document.getElementById('cover-image-id') as HTMLInputElement;
+  const coverStatus = document.getElementById('cover-status') as HTMLElement;
+  const coverUploadText = document.getElementById('cover-upload-text') as HTMLElement;
+  const tabs = document.querySelectorAll<HTMLButtonElement>('.tab');
+
   const siteId = form.dataset.siteId!;
   const postId = form.dataset.postId || null;
   const mode = form.dataset.mode!;
 
-  function insertAtCursor(text: string) {
-    const at = body.selectionStart ?? body.value.length;
-    body.value = body.value.slice(0, at) + text + body.value.slice(at);
-    body.selectionStart = body.selectionEnd = at + text.length;
-    body.focus();
-  }
-
-  async function uploadImage(file: File) {
-    status.textContent = `compressing ${file.name}…`;
-    // Client-side compress to keep payload small. Max edge 1600, JPEG 0.85.
+  // ─── image compression + upload ─────────────────────────────────────────
+  async function compressAndUpload(file: File): Promise<{ id: string; url: string } | null> {
     const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
     const ratio = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
     const w = Math.round(bitmap.width * ratio);
@@ -85,7 +198,7 @@ const today = new Date().toISOString().slice(0, 10);
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
     const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.85));
-    if (!blob) { status.textContent = 'compress failed'; return null; }
+    if (!blob) return null;
 
     const fd = new FormData();
     fd.append('file', blob, file.name.replace(/\.[^.]+$/, '') + '.jpg');
@@ -93,25 +206,137 @@ const today = new Date().toISOString().slice(0, 10);
     fd.append('width', String(w));
     fd.append('height', String(h));
 
-    status.textContent = `uploading ${(blob.size / 1024).toFixed(0)} KB…`;
     const r = await fetch('/admin/api/upload', { method: 'POST', body: fd });
-    if (!r.ok) { status.textContent = `upload failed: ${await r.text()}`; return null; }
-    const { id, url } = await r.json() as { id: string; url: string };
-    return { id, url };
+    if (!r.ok) return null;
+    return await r.json();
+  }
+
+  // ─── body images (inserted into markdown) ───────────────────────────────
+  function insertAtCursor(text: string) {
+    const at = body.selectionStart ?? body.value.length;
+    body.value = body.value.slice(0, at) + text + body.value.slice(at);
+    body.selectionStart = body.selectionEnd = at + text.length;
+    body.focus();
   }
 
   picker.addEventListener('change', async () => {
     const files = Array.from(picker.files ?? []);
     picker.value = '';
     for (const file of files) {
-      const result = await uploadImage(file);
-      if (result) {
-        insertAtCursor(`\n![${file.name.replace(/\.[^.]+$/, '')}](image:${result.id})\n`);
-        status.textContent = `inserted ${result.url}`;
-      }
+      status.textContent = `uploading ${file.name}…`;
+      const r = await compressAndUpload(file);
+      if (!r) { status.textContent = `upload failed: ${file.name}`; continue; }
+      insertAtCursor(`\n![${file.name.replace(/\.[^.]+$/, '')}](image:${r.id})\n`);
+      status.textContent = `inserted ${file.name}`;
     }
   });
 
+  // ─── cover image ────────────────────────────────────────────────────────
+  function setCover(id: string, url: string) {
+    coverIdInput.value = id;
+    coverThumb.src = url;
+    coverThumbWrap.style.display = '';
+    coverUploadText.textContent = 'replace';
+  }
+  function clearCover() {
+    coverIdInput.value = '';
+    coverThumb.src = '';
+    coverThumbWrap.style.display = 'none';
+    coverUploadText.textContent = '+ choose cover';
+  }
+  coverPicker.addEventListener('change', async () => {
+    const f = coverPicker.files?.[0];
+    coverPicker.value = '';
+    if (!f) return;
+    coverStatus.textContent = `uploading cover…`;
+    const r = await compressAndUpload(f);
+    if (!r) { coverStatus.textContent = 'cover upload failed'; return; }
+    setCover(r.id, r.url);
+    coverStatus.textContent = '';
+  });
+  coverRemove.addEventListener('click', () => clearCover());
+
+  // ─── markdown toolbar ───────────────────────────────────────────────────
+  function getSelection() {
+    return { start: body.selectionStart, end: body.selectionEnd, value: body.value };
+  }
+  function setSelection(start: number, end: number) {
+    body.selectionStart = start; body.selectionEnd = end; body.focus();
+  }
+  function wrap(prefix: string, suffix = prefix) {
+    const { start, end, value } = getSelection();
+    const selected = value.slice(start, end) || 'text';
+    const replacement = prefix + selected + suffix;
+    body.value = value.slice(0, start) + replacement + value.slice(end);
+    setSelection(start + prefix.length, start + prefix.length + selected.length);
+  }
+  function prefixLines(linePrefix: string) {
+    const { start, end, value } = getSelection();
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+    const lineEnd = end + (value.indexOf('\n', end) === -1 ? value.length - end : 0);
+    const block = value.slice(lineStart, lineEnd === lineStart ? value.length : lineEnd);
+    const replaced = block.split('\n').map((l) => linePrefix + l).join('\n');
+    body.value = value.slice(0, lineStart) + replaced + value.slice(lineStart + block.length);
+    setSelection(lineStart, lineStart + replaced.length);
+  }
+  function insertLink() {
+    const url = prompt('URL?');
+    if (!url) return;
+    const { start, end, value } = getSelection();
+    const text = value.slice(start, end) || 'link';
+    const replacement = `[${text}](${url})`;
+    body.value = value.slice(0, start) + replacement + value.slice(end);
+    setSelection(start + 1, start + 1 + text.length);
+  }
+
+  toolbar.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-md]');
+    if (!btn) return;
+    const cmd = btn.dataset.md;
+    switch (cmd) {
+      case 'bold':   wrap('**'); break;
+      case 'italic': wrap('*'); break;
+      case 'h2':     prefixLines('## '); break;
+      case 'h3':     prefixLines('### '); break;
+      case 'list':   prefixLines('- '); break;
+      case 'quote':  prefixLines('> '); break;
+      case 'link':   insertLink(); break;
+    }
+  });
+
+  body.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    if (e.key === 'b') { e.preventDefault(); wrap('**'); }
+    else if (e.key === 'i') { e.preventDefault(); wrap('*'); }
+  });
+
+  // ─── write / preview tabs ───────────────────────────────────────────────
+  async function renderPreview() {
+    previewArea.innerHTML = '<div class="preview-placeholder">rendering…</div>';
+    const r = await fetch('/admin/api/preview', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ siteId, body: body.value }),
+    });
+    if (!r.ok) { previewArea.innerHTML = `<div class="preview-placeholder">preview failed</div>`; return; }
+    const html = await r.text();
+    previewArea.innerHTML = html || '<div class="preview-placeholder">nothing to preview yet…</div>';
+  }
+  tabs.forEach((t) => t.addEventListener('click', async () => {
+    tabs.forEach((x) => x.classList.toggle('active', x === t));
+    if (t.dataset.tab === 'preview') {
+      body.style.display = 'none';
+      toolbar.style.display = 'none';
+      previewArea.style.display = '';
+      await renderPreview();
+    } else {
+      previewArea.style.display = 'none';
+      body.style.display = '';
+      toolbar.style.display = '';
+    }
+  }));
+
+  // ─── save / delete ──────────────────────────────────────────────────────
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     saveBtn.disabled = true; saveBtn.textContent = 'saving…';
@@ -123,6 +348,7 @@ const today = new Date().toISOString().slice(0, 10);
       date: fd.get('date'),
       body: fd.get('body') ?? '',
       tagNames: String(fd.get('tags') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+      coverImageId: coverIdInput.value || null,
     };
     const r = await fetch('/admin/api/save', {
       method: 'POST',
