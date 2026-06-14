@@ -34,7 +34,7 @@ Copy `.env.example` to `.env` (local) and fill in. For Cloudflare, set the same 
 ```bash
 GITHUB_OWNER=hoavo1490
 GITHUB_REPO=blog
-GITHUB_BRANCH=astro-migration   # or main, once cut
+GITHUB_BRANCH=main
 CONTENT_PATH=src/content/posts
 MEDIA_PATH=public/media/files
 
