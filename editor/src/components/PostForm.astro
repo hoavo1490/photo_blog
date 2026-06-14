@@ -45,17 +45,35 @@ const guid = initial.guid ?? newGuid();
     <input name="cover" value={initial.cover ?? ''} placeholder="/media/files/2026/06/14/foo.jpg" />
   </label>
 
-  <div style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
-    <label style="
-      display: inline-flex; align-items: center; gap: 8px;
-      min-height: 44px; padding: 0 16px;
-      border: 1px solid var(--border); border-radius: 999px;
-      cursor: pointer; background: var(--bg-elev);
-    ">
-      <span>+ image</span>
-      <input id="image-picker" type="file" accept="image/*" capture="environment" style="display: none;" />
-    </label>
-    <span id="image-status" style="font-size: 13px; color: var(--muted);"></span>
+  <div style="margin-bottom: 8px;">
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+      <label style="
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        min-height: 48px; padding: 0 20px;
+        border: 1px solid var(--border); border-radius: 999px;
+        cursor: pointer; background: var(--bg-elev);
+        font-weight: 500;
+        flex: 1; min-width: 140px; max-width: 240px;
+      ">
+        <span aria-hidden="true">📷</span>
+        <span>add photo</span>
+        <input id="image-picker" type="file" accept="image/*" multiple style="display: none;" />
+      </label>
+      <label style="
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        min-height: 48px; padding: 0 20px;
+        border: 1px solid var(--border); border-radius: 999px;
+        cursor: pointer; background: var(--bg-elev);
+      ">
+        <span aria-hidden="true">📸</span>
+        <span>take photo</span>
+        <input id="camera-picker" type="file" accept="image/*" capture="environment" style="display: none;" />
+      </label>
+    </div>
+    <div id="image-status" style="
+      font-size: 13px; color: var(--muted); margin-top: 8px;
+      min-height: 1.4em;
+    "></div>
   </div>
 
   <label style="display: block; margin-bottom: 14px;">
@@ -89,6 +107,7 @@ const guid = initial.guid ?? newGuid();
 
   const form = document.getElementById('post-form') as HTMLFormElement;
   const picker = document.getElementById('image-picker') as HTMLInputElement;
+  const cameraPicker = document.getElementById('camera-picker') as HTMLInputElement;
   const status = document.getElementById('image-status') as HTMLElement;
   const body = document.getElementById('body-area') as HTMLTextAreaElement;
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
@@ -163,12 +182,19 @@ const guid = initial.guid ?? newGuid();
     body.selectionStart = body.selectionEnd = cursor;
   }
 
-  // Picker (camera or photo library).
-  picker?.addEventListener('change', async () => {
-    const file = picker.files?.[0];
-    picker.value = '';
-    if (file) await handleFile(file);
-  });
+  // Library picker (multi-select). Uploads sequentially so the status line
+  // stays legible and we don't fire N parallel commits against GitHub.
+  async function handlePicker(input: HTMLInputElement) {
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (files.length > 1) status.textContent = `(${i + 1}/${files.length}) preparing ${file.name}…`;
+      await handleFile(file);
+    }
+  }
+  picker?.addEventListener('change', () => handlePicker(picker));
+  cameraPicker?.addEventListener('change', () => handlePicker(cameraPicker));
 
   // Paste an image from clipboard. Skip during IME composition.
   body.addEventListener('paste', (e) => {
