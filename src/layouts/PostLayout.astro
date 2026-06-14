@@ -2,6 +2,9 @@
 import BaseLayout from './BaseLayout.astro';
 import { getCollection } from 'astro:content';
 import { adjacentPosts } from '../utils/adjacent';
+import { byDateDesc } from '../utils/tags';
+import { postUrl } from '../utils/post-url';
+import { allImages } from '../utils/extract';
 import type { CollectionEntry } from 'astro:content';
 
 interface Props { post: CollectionEntry<'posts'> }
@@ -10,6 +13,18 @@ const { post } = Astro.props;
 const all = await getCollection('posts');
 const { previous, next } = adjacentPosts(all, post);
 const dateStr = post.data.date.toISOString().slice(0, 10);
+
+// Build the cross-post lightbox stream: every image across every post,
+// in newest-first chronological order. The browser uses this to let
+// the lightbox swipe through the entire blog as one continuous gallery.
+type StreamItem = { src: string; href: string; title: string };
+const stream: StreamItem[] = [];
+for (const p of all.sort(byDateDesc)) {
+  const href = postUrl(p);
+  for (const src of allImages(p.body ?? '')) {
+    stream.push({ src, href, title: p.data.title });
+  }
+}
 ---
 <BaseLayout title={post.data.title} description={post.data.description}>
   <article>
@@ -46,6 +61,7 @@ const dateStr = post.data.date.toISOString().slice(0, 10);
   </article>
 </BaseLayout>
 
+<script id="lightbox-stream" type="application/json" set:html={JSON.stringify(stream)}></script>
 <script>
   import '../scripts/lightbox';
 </script>

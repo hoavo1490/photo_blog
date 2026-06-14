@@ -8,6 +8,21 @@ export function firstImage(body: string): string | null {
   return html ? html[1] : null;
 }
 
+/** Every image URL in the markdown body, in document order. */
+export function allImages(body: string): string[] {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  const push = (u: string) => {
+    if (!seen.has(u)) {
+      seen.add(u);
+      urls.push(u);
+    }
+  };
+  for (const m of body.matchAll(/!\[[^\]]*\]\(([^)\s]+)/g)) push(m[1]);
+  for (const m of body.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)) push(m[1]);
+  return urls;
+}
+
 /** First non-empty paragraph as a plaintext description, truncated. */
 export function firstParagraph(body: string, max = 180): string | null {
   // Strip frontmatter is already done by the loader; body is markdown after `---`.
