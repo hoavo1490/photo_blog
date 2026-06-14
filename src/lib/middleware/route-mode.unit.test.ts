@@ -2,39 +2,44 @@ import { describe, it, expect } from 'vitest';
 import { classifyRoute, isCacheableMethod } from './route-mode';
 
 describe('classifyRoute', () => {
-  const ADMIN = 'admin.riovv.com';
-
-  it('returns admin when host matches the admin host', () => {
-    expect(classifyRoute({ host: 'admin.riovv.com', pathname: '/', adminHost: ADMIN })).toBe('admin');
+  it('returns admin for /admin and its children', () => {
+    expect(classifyRoute({ pathname: '/admin' })).toBe('admin');
+    expect(classifyRoute({ pathname: '/admin/' })).toBe('admin');
+    expect(classifyRoute({ pathname: '/admin/posts' })).toBe('admin');
+    expect(classifyRoute({ pathname: '/admin/api/save' })).toBe('admin');
   });
 
-  it('returns admin regardless of admin path (the route handles auth, not the classifier)', () => {
-    expect(classifyRoute({ host: 'admin.riovv.com', pathname: '/posts/new', adminHost: ADMIN })).toBe('admin');
+  it('returns admin for auth-flow paths', () => {
+    expect(classifyRoute({ pathname: '/login' })).toBe('admin');
+    expect(classifyRoute({ pathname: '/logout' })).toBe('admin');
+    expect(classifyRoute({ pathname: '/auth/callback' })).toBe('admin');
   });
 
-  it('treats admin host comparison case-insensitively (host is already lowercased by middleware)', () => {
-    // adminHost may come from env in arbitrary casing; classifier normalizes it.
-    expect(classifyRoute({ host: 'admin.riovv.com', pathname: '/', adminHost: 'ADMIN.RIOVV.COM' })).toBe('admin');
+  it('returns public-tenant for everything else under the tenant host', () => {
+    expect(classifyRoute({ pathname: '/' })).toBe('public-tenant');
+    expect(classifyRoute({ pathname: '/2026/06/14/hello.html' })).toBe('public-tenant');
+    expect(classifyRoute({ pathname: '/archive.html' })).toBe('public-tenant');
+    expect(classifyRoute({ pathname: '/tags.html' })).toBe('public-tenant');
+    expect(classifyRoute({ pathname: '/about.html' })).toBe('public-tenant');
+    expect(classifyRoute({ pathname: '/atom.xml' })).toBe('public-tenant');
   });
 
-  it('returns public-tenant for tenant public hosts', () => {
-    expect(classifyRoute({ host: 'riovv.com', pathname: '/', adminHost: ADMIN })).toBe('public-tenant');
-    expect(classifyRoute({ host: 'friend.example', pathname: '/2026/06/14/hi.html', adminHost: ADMIN })).toBe('public-tenant');
+  it('does not false-positive on paths that merely START with admin-prefix substrings', () => {
+    expect(classifyRoute({ pathname: '/administrator' })).toBe('public-tenant');
+    expect(classifyRoute({ pathname: '/2026/01/01/login-tips.html' })).toBe('public-tenant');
   });
 
-  it('returns asset for /_astro/ paths regardless of host', () => {
-    expect(classifyRoute({ host: 'riovv.com', pathname: '/_astro/foo.css', adminHost: ADMIN })).toBe('asset');
-    expect(classifyRoute({ host: 'admin.riovv.com', pathname: '/_astro/foo.js', adminHost: ADMIN })).toBe('asset');
+  it('returns asset for /_astro/ paths', () => {
+    expect(classifyRoute({ pathname: '/_astro/foo.css' })).toBe('asset');
   });
 
   it('returns asset for favicon.ico and robots.txt', () => {
-    expect(classifyRoute({ host: 'riovv.com', pathname: '/favicon.ico', adminHost: ADMIN })).toBe('asset');
-    expect(classifyRoute({ host: 'riovv.com', pathname: '/robots.txt', adminHost: ADMIN })).toBe('asset');
+    expect(classifyRoute({ pathname: '/favicon.ico' })).toBe('asset');
+    expect(classifyRoute({ pathname: '/robots.txt' })).toBe('asset');
   });
 
-  it('does not match asset prefix as a sub-path of a tenant pathname', () => {
-    // '/2026/_astro-tag.html' should NOT match /_astro/ prefix.
-    expect(classifyRoute({ host: 'riovv.com', pathname: '/2026/_astro-tag.html', adminHost: ADMIN })).toBe('public-tenant');
+  it('does not classify nested paths that merely contain /_astro/ as assets', () => {
+    expect(classifyRoute({ pathname: '/2026/_astro-tag.html' })).toBe('public-tenant');
   });
 });
 
