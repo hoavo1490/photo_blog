@@ -215,8 +215,11 @@ const initialCoverUrl = initial.coverUrl ?? '';
     // visual quality.
     const wantWidths = VARIANT_TARGETS.filter((w) => w <= bitmap.width);
     if (wantWidths.length === 0) wantWidths.push(bitmap.width);
-    const jpegResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/jpeg')));
-    const webpResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/webp')));
+    // Canvas.toBlob's WebP encoder is much less aggressive than cwebp at
+    // the same nominal quality -- 0.85 produces files 3-4x larger. Use a
+    // lower quality for WebP only; visually still indistinguishable.
+    const jpegResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/jpeg', 0.85)));
+    const webpResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/webp', 0.70)));
     const jpegs = jpegResults.filter((r): r is NonNullable<typeof r> => r !== null);
     if (jpegs.length === 0) return null;
     const webps = webpResults.filter((r): r is NonNullable<typeof r> => r !== null);
