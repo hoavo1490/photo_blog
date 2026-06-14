@@ -38,6 +38,7 @@ if (root) {
       children: 'a[data-pswp-src]',
       pswpModule: PhotoSwipe,
       showHideAnimationType: 'fade',
+      bgOpacity: 1,
     });
     lightbox.init();
   }
