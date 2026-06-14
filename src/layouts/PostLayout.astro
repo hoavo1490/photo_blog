@@ -1,19 +1,59 @@
 ---
 import { env } from 'cloudflare:workers';
 import BaseLayout from './BaseLayout.astro';
-import { renderPostBody } from '../lib/render';
+import { renderPostBody, coverUrlFor } from '../lib/render';
+import * as tagsRepo from '../lib/db/tags';
+import { firstParagraph } from '../lib/markdown';
 import type { Post } from '../lib/db/posts';
 import { marked } from 'marked';
+import { defaultAuthor, defaultSiteName } from '../data/nav';
 
 interface Props { post: Post }
 const { post } = Astro.props;
 
 const driver = Astro.locals.db!;
-const rewritten = await renderPostBody(driver, post, env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string });
+const tenant = Astro.locals.tenant!;
+const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
+
+const rewritten = await renderPostBody(driver, post, env_);
 const rendered = await marked.parse(rewritten);
 const dateStr = post.publishedAt ? post.publishedAt.toISOString().slice(0, 10) : '';
+
+const cover = await coverUrlFor(driver, post, env_);
+const postTags = await tagsRepo.listForPost(driver, { siteId: tenant.id, postId: post.id });
+const tagNames = postTags.map((t) => t.name);
+const description = post.description ?? firstParagraph(post.body) ?? undefined;
+
+const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
+const siteName = tenant.name ?? defaultSiteName;
+
+// BlogPosting JSON-LD enables Google rich results (article cards in
+// search). Keep it minimal; only emit fields we actually have.
+const jsonLd: Record<string, unknown> = {
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: post.title,
+  url: canonical,
+  datePublished: post.publishedAt?.toISOString(),
+  dateModified: post.updatedAt.toISOString(),
+  author: { '@type': 'Person', name: defaultAuthor },
+  publisher: { '@type': 'Organization', name: siteName },
+  mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+};
+if (description) jsonLd.description = description;
+if (cover) jsonLd.image = cover;
+if (tagNames.length) jsonLd.keywords = tagNames.join(', ');
 ---
-<BaseLayout title={post.title} description={post.description ?? undefined}>
+<BaseLayout
+  title={post.title}
+  description={description}
+  image={cover ?? undefined}
+  type="article"
+  publishedAt={post.publishedAt ?? undefined}
+  modifiedAt={post.updatedAt}
+  tags={tagNames}
+  jsonLd={jsonLd}
+>
   <article>
     <section class="title"><h2>{post.title}</h2></section>
     <section class="meta">

@@ -33,9 +33,12 @@ describe('classifyRoute', () => {
     expect(classifyRoute({ pathname: '/_astro/foo.css' })).toBe('asset');
   });
 
-  it('returns asset for favicon.ico and robots.txt', () => {
+  it('returns asset for favicon.ico', () => {
     expect(classifyRoute({ pathname: '/favicon.ico' })).toBe('asset');
-    expect(classifyRoute({ pathname: '/robots.txt' })).toBe('asset');
+  });
+
+  it('routes /robots.txt as public-tenant (dynamic endpoint)', () => {
+    expect(classifyRoute({ pathname: '/robots.txt' })).toBe('public-tenant');
   });
 
   it('does not classify nested paths that merely contain /_astro/ as assets', () => {

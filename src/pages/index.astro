@@ -29,8 +29,16 @@ for (const c of cards) {
   byYear.set(y, list);
 }
 const years = [...byYear.entries()].sort((a, b) => b[0] - a[0]);
+
+// og:image = latest post's cover so social shares of the home page get
+// a real image preview instead of a blank card.
+const latestCover = cards[0]?.cover;
+const latestDesc = cards[0]?.desc;
 ---
-<BaseLayout>
+<BaseLayout
+  description={latestDesc || undefined}
+  image={latestCover}
+>
   <div class="home-wrap">
     <div id="gallery" class="gallery">
       {years.map(([year, list]) => (

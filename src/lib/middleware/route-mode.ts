@@ -17,7 +17,9 @@ export interface ClassifyInput {
 
 // Astro's CF adapter serves static assets via the ASSETS binding from
 // /_astro/* and a handful of root files.
-const STATIC_PREFIXES = ['/_astro/', '/_image/', '/favicon.ico', '/robots.txt'];
+// /robots.txt is generated dynamically from a route, so it's NOT in here
+// -- only build-time static files served from the ASSETS binding belong.
+const STATIC_PREFIXES = ['/_astro/', '/_image/', '/favicon.ico'];
 
 // Path prefixes that put a request into the admin branch. Every admin route
 // either lives under /admin/* or is part of the auth flow.
