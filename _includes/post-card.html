@@ -1,0 +1,16 @@
+{%- comment -%}
+  Renders a single post card. Caller passes `post` and `cover` (absolute or root-relative URL).
+{%- endcomment -%}
+<a class="card" href="{{ include.post.url | relative_url }}" data-tags="{{ include.post.tags | join: ' ' }}">
+  <img loading="lazy" src="{{ include.cover | relative_url }}" alt="{{ include.post.title | escape }}">
+  <div class="overlay">
+    <div class="title">{{ include.post.title }}</div>
+    <div class="desc">
+      {%- if include.post.description -%}
+        {{ include.post.description }}
+      {%- else -%}
+        {{ include.post.excerpt | strip_html | normalize_whitespace | truncatewords: 22 }}
+      {%- endif -%}
+    </div>
+  </div>
+</a>

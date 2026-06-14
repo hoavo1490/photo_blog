@@ -1,6 +1,11 @@
 name: "rusty shutter"
 permalink: /:year/:month/:day/:title.html
 
+sass:
+  load_paths:
+    - media/css
+  style: compressed
+
 author: "wayne"
 atom-baseurl: "http://lhzhang.com"
 disqus: "gopherwood"

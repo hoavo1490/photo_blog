@@ -1,65 +1,40 @@
-task :default => :generate
+task :default => :serve
 
-desc 'Create new post with rake "post[post-name]"'
+desc 'Start dev server'
+task :serve do
+  sh 'bundle exec jekyll serve --watch'
+end
+
+desc 'Build site'
+task :build do
+  sh 'bundle exec jekyll build'
+end
+
+desc 'Deploy with rake "deploy[comment]"'
+task :deploy, [:comment] => :build do |t, args|
+  msg = args.comment || 'new deployment'
+  sh "git commit . -m '#{msg}' && git push"
+end
+
+desc 'Create new post: rake "post[post-name]"'
 task :post, [:title] do |t, args|
-  if args.title then
-    new_post(args.title)
-  else
-    puts 'rake "post[post-name]"'
-  end
-end
-
-desc 'Build site with Jekyll'
-task :generate => [:clean, :scss] do
-  `jekyll`
-end
-
-desc 'Generate css'
-task :scss do
-  `scss media/css/style.scss media/css/style.css`
-end
-
-desc 'Start server'
-task :server => [:clean, :scss] do
-  `jekyll serve -t`
-end
-
-desc 'Deploy with rake "depoly[comment]"'
-task :deploy, [:comment] => :generate do |t, args|
-  if args.comment then
-    `git commit . -m '#{args.comment}' && git push`
-  else
-    `git commit . -m 'new deployment' && git push`
-  end
-end
-
-desc 'Clean up'
-task :clean do
-  `rm -rf _site`
-end
-
-def new_post(title)
+  abort 'rake "post[post-name]"' unless args.title
   time = Time.now
-  filename = "_posts/" + time.strftime("%Y-%m-%d-") + title + '.markdown'
-  if File.exists? filename then
-    puts "Post already exists: #{filename}"
-    return
-  end
-  uuid = `uuidgen | tr "[:upper:]" "[:lower:]" | tr -d "\n"`
-  File.open(filename, "wb") do |f|
-    f << <<-EOS
----
-title: #{title}
-layout: post
-guid: urn:uuid:#{uuid}
-tags:
-  - 
----
+  filename = "_posts/#{time.strftime('%Y-%m-%d-')}#{args.title}.markdown"
+  abort "Post already exists: #{filename}" if File.exist?(filename)
+  uuid = `uuidgen`.strip.downcase
+  File.write(filename, <<~POST)
+    ---
+    title: #{args.title}
+    layout: post
+    guid: urn:uuid:#{uuid}
+    tags:
+      -
+    ---
 
 
-EOS
-  %x[echo "#{filename}" | pbcopy]
-  end
-  puts "created #{filename}"
+  POST
+  `echo "#{filename}" | pbcopy`
   `git add #{filename}`
+  puts "created #{filename}"
 end

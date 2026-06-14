@@ -1,0 +1,60 @@
+---
+layout: default
+---
+
+{%- comment -%}
+  Build eligible-post list: posts that either declare a `cover:` in frontmatter or contain an <img> in rendered content.
+{%- endcomment -%}
+{% assign eligible = site.posts | where_exp: "p", "p.cover or p.content contains '<img'" %}
+
+{%- comment -%} Collect unique tags from eligible posts. {%- endcomment -%}
+{% assign all_tags = "" | split: "" %}
+{% for p in eligible %}
+  {% if p.tags %}
+    {% assign all_tags = all_tags | concat: p.tags %}
+  {% endif %}
+{% endfor %}
+{% assign all_tags = all_tags | uniq | sort %}
+
+{%- comment -%} Group eligible posts by year, newest year first. {%- endcomment -%}
+{% assign by_year = eligible | group_by_exp: "p", "p.date | date: '%Y'" %}
+{% assign years_sorted = by_year | sort: "name" | reverse %}
+
+<div class="home-wrap">
+  <div class="tag-chips">
+    <button type="button" class="chip active" data-tag="all">all</button>
+    {% for t in all_tags %}
+      <button type="button" class="chip" data-tag="{{ t }}">{{ t }}</button>
+    {% endfor %}
+  </div>
+
+  <div id="gallery" class="gallery">
+    {% for group in years_sorted %}
+      <section class="year-section" data-year="{{ group.name }}">
+        <div class="section-header-wrapper">
+          <div class="section-title">{{ group.name }}</div>
+        </div>
+        <div class="section-images">
+          {% for p in group.items %}
+            {% assign cover_url = p.cover %}
+            {% unless cover_url %}
+              {% assign parts = p.content | split: '<img ' %}
+              {% if parts.size > 1 %}
+                {% assign tail = parts[1] | split: 'src="' %}
+                {% if tail.size > 1 %}
+                  {% assign src = tail[1] | split: '"' %}
+                  {% assign cover_url = src[0] %}
+                {% endif %}
+              {% endif %}
+            {% endunless %}
+            {% if cover_url %}
+              {% include post-card.html post=p cover=cover_url %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+</div>
+
+<script src="/media/js/home.js" defer></script>

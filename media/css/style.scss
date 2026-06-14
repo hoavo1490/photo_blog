@@ -1,3 +1,5 @@
+---
+---
 /*------------------------------------
  * sext-vi
  *
@@ -20,6 +22,8 @@ $monospace: "Fira Mono", monospace;
 $label-font: $font-name, "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 $time-font: "Ubuntu", monospace;
 $background-color: #f9f9f9;
+
+@import "cards";
 
 @mixin page {
   margin: 0 auto;
