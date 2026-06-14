@@ -25,7 +25,7 @@ function lerp(t: number): string {
           const w = weight(t.publishedCount);
           const size = (0.9 + w * 1.1).toFixed(2);
           return (
-            <a href={`/tags/${encodeURIComponent(t.slug)}.html`} title={`${t.name} (${t.publishedCount})`}
+            <a href={`/tags/${encodeURIComponent(t.slug)}`} title={`${t.name} (${t.publishedCount})`}
               style={`color: ${lerp(w)}; font-size: ${size}em;`}>{t.name}</a>
           );
         })}
