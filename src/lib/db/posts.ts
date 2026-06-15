@@ -229,6 +229,45 @@ export async function update(driver: SqlDriver, args: UpdatePostInput): Promise<
   return rows[0] ? fromRow(rows[0]) : null;
 }
 
+/** Find the published sibling posts on the same site immediately
+ *  before and after `post` by publish date. Used by the post detail
+ *  page to render the prev / next chevrons in the closing divider.
+ *  Drafts and scheduled posts are ignored. Returns nulls at the
+ *  ends of the timeline. */
+export async function findAdjacent(
+  driver: SqlDriver,
+  args: { siteId: string; post: Pick<Post, 'id' | 'publishedAt'> },
+): Promise<{ previous: Post | null; next: Post | null }> {
+  if (!args.post.publishedAt) return { previous: null, next: null };
+  const publishedAt = args.post.publishedAt.toISOString();
+  // Tie-break on id when two posts share a published_at, so navigating
+  // through ties is deterministic and complete.
+  const [prevRows, nextRows] = await Promise.all([
+    driver.query<PostRow>(
+      `SELECT ${SELECT} FROM posts
+       WHERE site_id = $1 AND status = 'published' AND id <> $2
+         AND (published_at < $3::timestamptz
+              OR (published_at = $3::timestamptz AND id < $2))
+       ORDER BY published_at DESC, id DESC
+       LIMIT 1`,
+      [args.siteId, args.post.id, publishedAt],
+    ),
+    driver.query<PostRow>(
+      `SELECT ${SELECT} FROM posts
+       WHERE site_id = $1 AND status = 'published' AND id <> $2
+         AND (published_at > $3::timestamptz
+              OR (published_at = $3::timestamptz AND id > $2))
+       ORDER BY published_at ASC, id ASC
+       LIMIT 1`,
+      [args.siteId, args.post.id, publishedAt],
+    ),
+  ]);
+  return {
+    previous: prevRows[0] ? fromRow(prevRows[0]) : null,
+    next: nextRows[0] ? fromRow(nextRows[0]) : null,
+  };
+}
+
 export async function del(
   driver: SqlDriver,
   args: { siteId: string; id: string },

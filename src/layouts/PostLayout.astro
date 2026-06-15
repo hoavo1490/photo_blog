@@ -3,9 +3,11 @@ import { env } from 'cloudflare:workers';
 import BaseLayout from './BaseLayout.astro';
 import { coverUrlFor, buildBodyImageResolver } from '../lib/render';
 import * as tagsRepo from '../lib/db/tags';
+import * as postsRepo from '../lib/db/posts';
 import { firstParagraph, firstBodyImageInfo, rewriteImageTokens } from '../lib/markdown';
 import { sanitizePostHtml } from '../lib/sanitize-html';
 import type { Post } from '../lib/db/posts';
+import { postUrl } from '../lib/post-url';
 import { marked } from 'marked';
 import { defaultAuthor, defaultSiteName } from '../data/nav';
 
@@ -20,11 +22,18 @@ const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string }
 // stacking three RTTs to Neon (~50ms each) before render could begin.
 // All three queries only need the post + tenant we already have, so
 // nothing depends on the previous one's result.
-const [bodyResolver, cover, postTags] = await Promise.all([
+const [bodyResolver, cover, postTags, adjacent] = await Promise.all([
   buildBodyImageResolver(driver, post, env_),
   coverUrlFor(driver, post, env_),
   tagsRepo.listForPost(driver, { siteId: tenant.id, postId: post.id }),
+  postsRepo.findAdjacent(driver, { siteId: tenant.id, post }),
 ]);
+const previousUrl = adjacent.previous?.publishedAt
+  ? postUrl({ publishedAt: adjacent.previous.publishedAt, slug: adjacent.previous.slug })
+  : null;
+const nextUrl = adjacent.next?.publishedAt
+  ? postUrl({ publishedAt: adjacent.next.publishedAt, slug: adjacent.next.slug })
+  : null;
 const rewritten = rewriteImageTokens(post.body, bodyResolver);
 // marked.parse() passes raw HTML through. Sanitize before set:html so
 // hostile authors can't XSS readers.
@@ -80,6 +89,39 @@ if (tagNames.length) jsonLd.keywords = tagNames.join(', ');
       )}
     </section>
     <section class="post" set:html={rendered}></section>
+
+    {/* Chevron strip closing the post: prev (older) on the left, next
+        (newer) on the right. Inline SVGs match the header's icon set
+        and avoid pulling in Font Awesome just for two glyphs. Renders
+        a hollow disc when there's no neighbor in that direction. */}
+    <nav class="divider" aria-label="adjacent posts">
+      <span>
+        {previousUrl && adjacent.previous ? (
+          <a href={previousUrl} title={adjacent.previous.title} rel="prev" aria-label={`Older post: ${adjacent.previous.title}`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </a>
+        ) : (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+          </svg>
+        )}
+      </span>
+      <span>
+        {nextUrl && adjacent.next ? (
+          <a href={nextUrl} title={adjacent.next.title} rel="next" aria-label={`Newer post: ${adjacent.next.title}`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </a>
+        ) : (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+          </svg>
+        )}
+      </span>
+    </nav>
   </article>
 </BaseLayout>
 
