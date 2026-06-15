@@ -1,6 +1,12 @@
-$font-name: "telexregular";
+// Be Vietnam Pro is the body / header face -- humanist sans designed
+// specifically for Vietnamese typography, with proper stacked-tone
+// glyph metrics so ề / ầ / ố / ợ etc. don't fall back to the system
+// font (which would render with mismatched x-height + stroke weight).
+// The previous "telexregular" name had no matching @font-face anywhere
+// in the project -- text was silently rendered in the system fallback.
+$font-name: "Be Vietnam Pro";
 $font: $font-name, "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 $monospace: "Fira Mono", monospace;
 $label-font: $font-name, "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-$time-font: "Ubuntu", monospace;
+$time-font: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 $background-color: #f9f9f9;

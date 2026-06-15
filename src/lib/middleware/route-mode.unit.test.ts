@@ -43,7 +43,7 @@ describe('classifyRoute', () => {
   });
 
   it('returns asset for /fonts/* (self-hosted webfonts)', () => {
-    expect(classifyRoute({ pathname: '/fonts/ubuntu-300.woff2' })).toBe('asset');
+    expect(classifyRoute({ pathname: '/fonts/be-vietnam-pro-300-latin.woff2' })).toBe('asset');
   });
 
   it('routes /robots.txt as public-tenant (dynamic endpoint)', () => {
