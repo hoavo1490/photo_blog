@@ -4,7 +4,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 import PostForm from '../../../components/PostForm.astro';
 import * as posts from '../../../lib/db/posts';
 import type { SqlDriver } from '../../../lib/db/driver';
-import { publicUrlForKey } from '../../../lib/r2/images';
+import { publicUrlForKey, editorPreviewUrlForKey } from '../../../lib/r2/images';
 import { allImageTokens } from '../../../lib/markdown';
 
 const session = Astro.locals.session;
@@ -54,12 +54,23 @@ type ImageEntry = { id: string; url: string };
 const bodyImages: ImageEntry[] = [];
 if (bodyTokens.length > 0) {
   const placeholders = bodyTokens.map((_, i) => `$${i + 2}`).join(',');
-  const rows = await driver.query<{ id: string; r2_key: string }>(
-    `SELECT id, r2_key FROM images WHERE site_id = $1 AND id IN (${placeholders})`,
+  const rows = await driver.query<{ id: string; r2_key: string; variant_widths: number[] | null }>(
+    `SELECT id, r2_key, variant_widths FROM images WHERE site_id = $1 AND id IN (${placeholders})`,
     [siteId, ...bodyTokens],
   );
   for (const r of rows) {
-    bodyImages.push({ id: r.id, url: publicUrlForKey(r.r2_key, r2Env_) });
+    // Editor renders a smaller variant (800w preferred) so loads are
+    // snappy. We also register the canonical /img/<key> URL so existing
+    // bodies that already reference the primary still collapse to tokens
+    // on save.
+    const widths = (r.variant_widths ?? []).map((n) => typeof n === 'string' ? parseInt(n, 10) : n);
+    const editorUrl = editorPreviewUrlForKey(r.r2_key, widths);
+    const canonicalUrl = publicUrlForKey(r.r2_key, r2Env_);
+    // Push the canonical first so urlToUuid covers both URLs, then the
+    // editor URL last so uuidToUrl resolves tokens to the small variant
+    // (buildImageMapping is last-write-wins for the forward direction).
+    if (editorUrl !== canonicalUrl) bodyImages.push({ id: r.id, url: canonicalUrl });
+    bodyImages.push({ id: r.id, url: editorUrl });
   }
 }
 ---

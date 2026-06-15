@@ -86,6 +86,24 @@ export async function mountMilkdownEditor(
         view.focus();
       });
     },
+    insertImageBlock: (url: string, alt = '') => {
+      // Insert a real image-block ProseMirror node so Crepe renders it
+      // immediately as an inline image -- not as raw markdown text
+      // that the user would then have to nudge through an input rule.
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const schema: Schema = view.state.schema;
+        // Crepe's image-block component registers a node named
+        // `image-block`. Fall back to the plain `image` node if that's
+        // not in the schema (e.g. if someone disabled the feature).
+        const imageBlockType = schema.nodes['image-block'] ?? schema.nodes.image;
+        if (!imageBlockType) return;
+        const node = imageBlockType.create({ src: url, alt });
+        const tr = view.state.tr.replaceSelectionWith(node);
+        view.dispatch(tr);
+        view.focus();
+      });
+    },
     focus: () => {
       crepe.editor.action((ctx) => ctx.get(editorViewCtx).focus());
     },

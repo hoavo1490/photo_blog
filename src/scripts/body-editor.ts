@@ -15,6 +15,12 @@ export interface BodyEditor {
    *  cursor is tracked). Used by the photo-upload toolbar button to
    *  drop `![alt](image:<uuid>)` next to where the user was typing. */
   insertAtCursor(text: string): void;
+  /** Insert a proper image block at the cursor. WYSIWYG implementations
+   *  create the editor's native image node so it renders inline
+   *  immediately; the textarea fallback just appends the markdown
+   *  source. The URL should be the already-resolved /img/<key>...
+   *  preview the editor will render. */
+  insertImageBlock(url: string, alt?: string): void;
   /** Move focus into the editor. */
   focus(): void;
   /** Tear down listeners, DOM, etc. Idempotent. */
@@ -33,6 +39,12 @@ export function mountTextareaEditor(textarea: HTMLTextAreaElement, initial: stri
       const at = textarea.selectionStart ?? textarea.value.length;
       textarea.value = textarea.value.slice(0, at) + text + textarea.value.slice(at);
       textarea.selectionStart = textarea.selectionEnd = at + text.length;
+    },
+    insertImageBlock: (url: string, alt = '') => {
+      const at = textarea.selectionStart ?? textarea.value.length;
+      const md = `\n![${alt}](${url})\n`;
+      textarea.value = textarea.value.slice(0, at) + md + textarea.value.slice(at);
+      textarea.selectionStart = textarea.selectionEnd = at + md.length;
     },
     focus: () => textarea.focus(),
     destroy: () => { /* nothing to clean up on a bare textarea */ },

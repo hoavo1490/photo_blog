@@ -10,7 +10,12 @@
 
 export interface UploadResult {
   id: string;
+  /** Canonical /img/<key> URL -- points at the 1600w primary, used by
+   *  the public site's srcset fallback. */
   url: string;
+  /** Optional smaller-variant URL (typically 800w). Preferred by the
+   *  editor so it doesn't sit grey while the primary downloads. */
+  editorUrl?: string;
 }
 
 export function createCrepeUploadHandler(
@@ -21,6 +26,6 @@ export function createCrepeUploadHandler(
     const r = await upload(file);
     if (!r) throw new Error(`upload failed for ${file.name || 'image'}`);
     onUploaded?.(r);
-    return r.url;
+    return r.editorUrl ?? r.url;
   };
 }

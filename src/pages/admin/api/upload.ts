@@ -5,6 +5,7 @@ import {
   keyFor,
   variantKeyForKey,
   publicUrlForKey,
+  editorPreviewUrlForKey,
   readImageDimensions,
   detectImageFormat,
   contentTypeForFormat,
@@ -156,6 +157,10 @@ export const POST: APIRoute = async (ctx) => {
   return new Response(JSON.stringify({
     id: image.id,
     url: publicUrlForKey(r2Key, e),
+    // editorUrl points at a smaller variant (800w preferred) so the WYSIWYG
+    // editor renders the image instantly instead of waiting for the 1600w
+    // primary to download. Public site keeps using `url` as srcset fallback.
+    editorUrl: editorPreviewUrlForKey(r2Key, variantWidths),
     variantWidths,
   }), {
     headers: { 'content-type': 'application/json' },

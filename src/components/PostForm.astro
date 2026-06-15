@@ -262,7 +262,15 @@ const initialBodyImages = initial.bodyImages ?? [];
         },
         {
           uploadImage: compressAndUpload,
-          onImageUploaded: (entry) => rememberImage(imageMap, entry),
+          onImageUploaded: (entry) => {
+            // Register both URLs: the canonical first (so reverse-direction
+            // collapse covers both), then the editor URL last so the
+            // forward direction resolves tokens to the smaller variant.
+            rememberImage(imageMap, { id: entry.id, url: entry.url });
+            if (entry.editorUrl && entry.editorUrl !== entry.url) {
+              rememberImage(imageMap, { id: entry.id, url: entry.editorUrl });
+            }
+          },
         },
       );
     } catch (err) {
@@ -306,7 +314,7 @@ const initialBodyImages = initial.bodyImages ?? [];
     return blob ? { blob, width: w, height: h } : null;
   }
 
-  async function compressAndUpload(file: File): Promise<{ id: string; url: string } | null> {
+  async function compressAndUpload(file: File): Promise<{ id: string; url: string; editorUrl?: string } | null> {
     const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
 
     // Generate every target ≤ original width. The largest one becomes
@@ -354,18 +362,21 @@ const initialBodyImages = initial.bodyImages ?? [];
       status.textContent = `uploading ${file.name}…`;
       const r = await compressAndUpload(file);
       if (!r) { status.textContent = `upload failed: ${file.name}`; continue; }
-      // Register the new image in the bidirectional map so the next
-      // editor change still collapses to a token on save.
-      rememberImage(imageMap, { id: r.id, url: r.url });
-      // Insert with empty alt -- the auto-filename is meaningless to
-      // screen readers and the renderer strips slug-shaped alts anyway.
-      // Authors can type caption text into the brackets after insertion.
-      // We insert the resolved URL (not the token) so the editor renders
-      // the image immediately. On save, collapseImageTokens turns it
-      // back into image:<uuid>.
-      const insertion = `\n![](${r.url})\n`;
+      // The editor renders the smaller variant (800w) for snappy loads
+      // while the public site still references the canonical /img/<key>
+      // via srcset fallback. Both URLs collapse to the same image:<uuid>
+      // token on save.
+      const renderUrl = r.editorUrl ?? r.url;
+      // Register the canonical first so the reverse map covers both, then
+      // the render URL last so the forward map (uuid -> URL) resolves to
+      // the smaller variant the editor displays.
+      if (renderUrl !== r.url) rememberImage(imageMap, { id: r.id, url: r.url });
+      rememberImage(imageMap, { id: r.id, url: renderUrl });
       if (editor) {
-        editor.insertAtCursor(insertion);
+        // insertImageBlock builds a real image node in Milkdown so the
+        // image renders inline immediately (rather than as raw markdown
+        // text the user would have to nudge through an input rule).
+        editor.insertImageBlock(renderUrl);
         body.value = collapseImageTokens(editor.getMarkdown(), imageMap);
       } else {
         // Editor not mounted yet; write the token form to the textarea.

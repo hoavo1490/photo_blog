@@ -45,4 +45,38 @@ describe('createCrepeUploadHandler', () => {
     const handler = createCrepeUploadHandler(upload);
     await expect(handler(FILE)).resolves.toBe('/img/a.jpg');
   });
+
+  it('returns editorUrl when present so Crepe renders the small variant', async () => {
+    const upload = vi.fn(async () => ({
+      id: 'u1',
+      url: '/img/big.jpg',
+      editorUrl: '/img/big.800w.jpg',
+    }));
+    const handler = createCrepeUploadHandler(upload);
+    const url = await handler(FILE);
+    expect(url).toBe('/img/big.800w.jpg');
+  });
+
+  it('falls back to url when editorUrl is not provided', async () => {
+    const upload = vi.fn(async () => ({ id: 'u1', url: '/img/only.jpg' }));
+    const handler = createCrepeUploadHandler(upload);
+    const url = await handler(FILE);
+    expect(url).toBe('/img/only.jpg');
+  });
+
+  it('passes the full {id, url, editorUrl} entry to onUploaded', async () => {
+    const upload = vi.fn(async () => ({
+      id: 'u1',
+      url: '/img/big.jpg',
+      editorUrl: '/img/big.800w.jpg',
+    }));
+    const onUploaded = vi.fn();
+    const handler = createCrepeUploadHandler(upload, onUploaded);
+    await handler(FILE);
+    expect(onUploaded).toHaveBeenCalledExactlyOnceWith({
+      id: 'u1',
+      url: '/img/big.jpg',
+      editorUrl: '/img/big.800w.jpg',
+    });
+  });
 });

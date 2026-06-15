@@ -125,6 +125,23 @@ export function variantUrlForKey(
   return publicUrlForKey(variantKeyForKey(key, width), env);
 }
 
+/** URL to show in the admin editor preview. Picks the smallest variant
+ *  that's still sharp enough on hi-DPI (800w on a ~400px content box).
+ *  Falls back to 1200w / 400w / the canonical 1600w in that order so
+ *  legacy images with sparse variants still display. The canonical
+ *  URL (publicUrlForKey) is reserved for the public-site renderer
+ *  which adds its own srcset on top. */
+export function editorPreviewUrlForKey(
+  key: string,
+  variantWidths: ReadonlyArray<number>,
+): string {
+  const order: number[] = [800, 1200, 400];
+  for (const w of order) {
+    if (variantWidths.includes(w)) return `/img/${variantKeyForKey(key, w)}`;
+  }
+  return `/img/${key}`;
+}
+
 /** Public URL for a stored key. Images are served through the Worker
  *  at `/img/<key>` -- the PHOTOS R2 binding is the single source of
  *  truth, and routing through the Worker lets us set proper cache

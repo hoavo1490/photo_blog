@@ -63,4 +63,17 @@ describe('BodyEditor (textarea impl)', () => {
     const ed = mountTextareaEditor(ta, '');
     expect(() => { ed.destroy(); ed.destroy(); }).not.toThrow();
   });
+
+  it('insertImageBlock() appends markdown image syntax', () => {
+    const ed = mountTextareaEditor(ta, 'before');
+    ta.selectionStart = ta.selectionEnd = ta.value.length;
+    ed.insertImageBlock('/img/photo.800w.jpg');
+    expect(ed.getMarkdown()).toBe('before\n![](/img/photo.800w.jpg)\n');
+  });
+
+  it('insertImageBlock() respects the alt text argument', () => {
+    const ed = mountTextareaEditor(ta, '');
+    ed.insertImageBlock('/img/x.jpg', 'sunset');
+    expect(ed.getMarkdown()).toContain('![sunset](/img/x.jpg)');
+  });
 });

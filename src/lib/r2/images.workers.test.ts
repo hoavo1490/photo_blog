@@ -4,6 +4,7 @@ import {
   keyFor,
   uploadImage,
   publicUrlForKey,
+  editorPreviewUrlForKey,
   deleteImage,
   readImageDimensions,
   detectImageFormat,
@@ -114,6 +115,35 @@ describe('publicUrlForKey', () => {
       R2_DEV_BASE: 'https://dev.r2.dev',
     });
     expect(url).toBe('/img/s/x.jpg');
+  });
+});
+
+describe('editorPreviewUrlForKey', () => {
+  // 800w is the sweet spot: ~95KB JPEG / ~57KB AVIF on a 4:3 photo,
+  // and sharp enough on a 2x DPR ~400px editor column.
+  it('prefers the 800w variant when available', () => {
+    const url = editorPreviewUrlForKey('s/2026/06/14/abc-photo.jpg', [400, 800, 1200]);
+    expect(url).toBe('/img/s/2026/06/14/abc-photo.800w.jpg');
+  });
+
+  it('falls back to 1200w when 800w is missing', () => {
+    const url = editorPreviewUrlForKey('s/2026/06/14/abc-photo.jpg', [400, 1200]);
+    expect(url).toBe('/img/s/2026/06/14/abc-photo.1200w.jpg');
+  });
+
+  it('falls back to 400w when only smaller variants exist', () => {
+    const url = editorPreviewUrlForKey('s/x.jpg', [400]);
+    expect(url).toBe('/img/s/x.400w.jpg');
+  });
+
+  it('falls back to the canonical URL when no variants exist', () => {
+    const url = editorPreviewUrlForKey('s/x.jpg', []);
+    expect(url).toBe('/img/s/x.jpg');
+  });
+
+  it('strips the file extension correctly for variant keys', () => {
+    expect(editorPreviewUrlForKey('s/photo.png', [800])).toBe('/img/s/photo.800w.jpg');
+    expect(editorPreviewUrlForKey('s/photo.JPEG', [800])).toBe('/img/s/photo.800w.jpg');
   });
 });
 
