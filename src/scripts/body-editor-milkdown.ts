@@ -10,6 +10,8 @@ import { Crepe } from '@milkdown/crepe';
 import { editorViewCtx } from '@milkdown/core';
 import { Schema } from '@milkdown/prose/model';
 import { TextSelection } from '@milkdown/prose/state';
+import { toggleMark, wrapIn } from '@milkdown/prose/commands';
+import { wrapInList } from '@milkdown/prose/schema-list';
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
 
@@ -145,6 +147,62 @@ export async function mountMilkdownEditor(
           tr = tr.setSelection(TextSelection.create(tr.doc, afterImg + 1));
         }
         view.dispatch(tr);
+        view.focus();
+      });
+    },
+    toggleBold: () => {
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const mark = view.state.schema.marks.strong;
+        if (!mark) return;
+        toggleMark(mark)(view.state, view.dispatch);
+        view.focus();
+      });
+    },
+    toggleItalic: () => {
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const mark = view.state.schema.marks.em;
+        if (!mark) return;
+        toggleMark(mark)(view.state, view.dispatch);
+        view.focus();
+      });
+    },
+    toggleBlockquote: () => {
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const node = view.state.schema.nodes.blockquote;
+        if (!node) return;
+        wrapIn(node)(view.state, view.dispatch);
+        view.focus();
+      });
+    },
+    toggleBulletList: () => {
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const node = view.state.schema.nodes.bullet_list;
+        if (!node) return;
+        wrapInList(node)(view.state, view.dispatch);
+        view.focus();
+      });
+    },
+    insertLink: (url: string) => {
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const mark = view.state.schema.marks.link;
+        if (!mark) return;
+        // Attach the URL via mark attrs. If the selection is empty,
+        // first insert the URL itself as the link text so there's
+        // something to mark and click.
+        const { from, to } = view.state.selection;
+        if (from === to) {
+          const tr = view.state.tr.insertText(url, from);
+          tr.addMark(from, from + url.length, mark.create({ href: url }));
+          tr.setSelection(TextSelection.create(tr.doc, from + url.length));
+          view.dispatch(tr);
+        } else {
+          toggleMark(mark, { href: url })(view.state, view.dispatch);
+        }
         view.focus();
       });
     },

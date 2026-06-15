@@ -90,4 +90,68 @@ describe('BodyEditor (textarea impl)', () => {
     ed.insertImageBlock('/img/x.jpg', 'sunset');
     expect(ed.getMarkdown()).toContain('![sunset](/img/x.jpg)');
   });
+
+  describe('formatting commands (toolbar bindings)', () => {
+    it('toggleBold() wraps the selection with **…**', () => {
+      const ed = mountTextareaEditor(ta, 'hello world');
+      ta.selectionStart = 6; ta.selectionEnd = 11; // "world"
+      ed.toggleBold();
+      expect(ed.getMarkdown()).toBe('hello **world**');
+    });
+
+    it('toggleBold() inserts an empty pair when the selection is collapsed', () => {
+      const ed = mountTextareaEditor(ta, 'hi ');
+      ta.selectionStart = ta.selectionEnd = 3;
+      ed.toggleBold();
+      expect(ed.getMarkdown()).toBe('hi ****');
+      // Cursor should sit BETWEEN the two pairs so the user can start typing
+      // immediately and have their text be bold.
+      expect(ta.selectionStart).toBe(5);
+      expect(ta.selectionEnd).toBe(5);
+    });
+
+    it('toggleItalic() wraps the selection with _…_', () => {
+      const ed = mountTextareaEditor(ta, 'hello world');
+      ta.selectionStart = 0; ta.selectionEnd = 5;
+      ed.toggleItalic();
+      expect(ed.getMarkdown()).toBe('_hello_ world');
+    });
+
+    it('toggleBlockquote() prefixes every selected line with "> "', () => {
+      const ed = mountTextareaEditor(ta, 'one\ntwo\nthree');
+      ta.selectionStart = 0; ta.selectionEnd = 'one\ntwo'.length;
+      ed.toggleBlockquote();
+      expect(ed.getMarkdown()).toBe('> one\n> two\nthree');
+    });
+
+    it('toggleBlockquote() prefixes the current line when the selection is collapsed', () => {
+      const ed = mountTextareaEditor(ta, 'alpha\nbeta');
+      // Cursor inside "beta".
+      ta.selectionStart = ta.selectionEnd = 'alpha\n'.length + 2;
+      ed.toggleBlockquote();
+      expect(ed.getMarkdown()).toBe('alpha\n> beta');
+    });
+
+    it('toggleBulletList() prefixes every selected line with "- "', () => {
+      const ed = mountTextareaEditor(ta, 'a\nb\nc');
+      ta.selectionStart = 0; ta.selectionEnd = ta.value.length;
+      ed.toggleBulletList();
+      expect(ed.getMarkdown()).toBe('- a\n- b\n- c');
+    });
+
+    it('insertLink() wraps the selection with []() carrying the URL', () => {
+      const ed = mountTextareaEditor(ta, 'see docs here');
+      ta.selectionStart = 4; ta.selectionEnd = 8; // "docs"
+      ed.insertLink('https://example.com');
+      expect(ed.getMarkdown()).toBe('see [docs](https://example.com) here');
+    });
+
+    it('insertLink() inserts an empty []() pair when nothing is selected', () => {
+      const ed = mountTextareaEditor(ta, '');
+      ed.insertLink('https://example.com');
+      expect(ed.getMarkdown()).toBe('[](https://example.com)');
+      // Cursor inside the brackets so the user can type the link text.
+      expect(ta.selectionStart).toBe(1);
+    });
+  });
 });
