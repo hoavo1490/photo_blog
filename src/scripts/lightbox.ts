@@ -44,14 +44,30 @@ export function initLightbox(): void {
       a.appendChild(target);
     }
 
-    const setSize = () => {
-      if (img.naturalWidth && img.naturalHeight) {
-        a!.setAttribute('data-pswp-width', String(img.naturalWidth));
-        a!.setAttribute('data-pswp-height', String(img.naturalHeight));
-      }
-    };
-    if (img.complete) setSize();
-    else img.addEventListener('load', setSize, { once: true });
+    // Prefer the declared width/height HTML attrs -- those are the
+    // ORIGINAL full-res dimensions written by the markdown rewriter
+    // from the images table. naturalWidth/Height reflect whichever
+    // variant the browser picked, which can race vs PhotoSwipe init
+    // (slow network = no dims declared = PhotoSwipe defaults to square
+    // and stretches the image when it loads). Reading the attrs lets
+    // us set dimensions synchronously, before the image even loads.
+    const declaredW = parseInt(img.getAttribute('width') || '0', 10);
+    const declaredH = parseInt(img.getAttribute('height') || '0', 10);
+    if (declaredW > 0 && declaredH > 0) {
+      a.setAttribute('data-pswp-width', String(declaredW));
+      a.setAttribute('data-pswp-height', String(declaredH));
+    } else {
+      // Legacy images without declared dims: fall back to naturalWidth
+      // once the variant has loaded.
+      const setSize = () => {
+        if (img.naturalWidth && img.naturalHeight) {
+          a!.setAttribute('data-pswp-width', String(img.naturalWidth));
+          a!.setAttribute('data-pswp-height', String(img.naturalHeight));
+        }
+      };
+      if (img.complete) setSize();
+      else img.addEventListener('load', setSize, { once: true });
+    }
   });
 
   const lightbox = new PhotoSwipeLightbox({
