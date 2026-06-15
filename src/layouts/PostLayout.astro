@@ -66,11 +66,18 @@ if (tagNames.length) jsonLd.keywords = tagNames.join(', ');
   lcpImage={firstBodyImg ?? undefined}
 >
   <article>
-    <section class="title"><h2>{post.title}</h2></section>
+    <section class="title"><h1>{post.title}</h1></section>
     <section class="meta">
       <span class="time">
         <time datetime={dateStr}>{dateStr}</time>
       </span>
+      {postTags.length > 0 && (
+        <span class="tags">
+          {postTags.map((t) => (
+            <a href={`/tags/${t.slug}`} rel="tag">#{t.name}</a>
+          ))}
+        </span>
+      )}
     </section>
     <section class="post" set:html={rendered}></section>
   </article>

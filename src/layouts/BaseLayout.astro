@@ -57,7 +57,7 @@ const desc = description ?? fallbackDescription;
 const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
 ---
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
   <head>
     <meta charset="utf-8" />
     <meta name="author" content={defaultAuthor} />
@@ -65,7 +65,10 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
     <title>{pageTitle}</title>
     <meta name="description" content={desc} />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
-    <link rel="canonical" href={canonical} />
+    {/* Skip canonical on noindex pages (404, etc) -- emitting a canonical
+        for a missing URL tells Google "yes, the broken URL is the
+        canonical one," which is the opposite of what we want. */}
+    {!noindex && <link rel="canonical" href={canonical} />}
 
     {/* Open Graph */}
     <meta property="og:type" content={type} />
@@ -73,7 +76,7 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
     <meta property="og:title" content={title ?? siteName} />
     <meta property="og:description" content={desc} />
     <meta property="og:url" content={canonical} />
-    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale" content="vi_VN" />
     {image && <meta property="og:image" content={image} />}
     {image && imageWidth && <meta property="og:image:width" content={String(imageWidth)} />}
     {image && imageHeight && <meta property="og:image:height" content={String(imageHeight)} />}
@@ -138,7 +141,7 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
         downloading during head parse but text still renders in the
         fallback first via font-display: swap. */}
     <link rel="preload" href="/fonts/ubuntu-300.woff2" as="font" type="font/woff2" crossorigin />
-    <style is:inline>{`
+    <style is:inline>
       @font-face {
         font-family: 'Ubuntu';
         font-style: normal;
@@ -146,7 +149,7 @@ const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
         font-display: swap;
         src: url('/fonts/ubuntu-300.woff2') format('woff2');
       }
-    `}</style>
+    </style>
 
     {jsonLd && (
       <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />

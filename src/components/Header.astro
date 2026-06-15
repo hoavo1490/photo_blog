@@ -1,10 +1,18 @@
 ---
 import { nav, defaultSiteName } from '../data/nav';
 const siteName = Astro.locals.tenant?.name ?? defaultSiteName;
+// Only the home page lets the site title own the page's single <h1>;
+// every other page promotes its own title to <h1> and the header here
+// downgrades to a plain <p> so we don't ship two h1s.
+const isHome = Astro.url.pathname === '/';
 ---
 <header class="site-header">
   <div class="site-title">
-    <h1><a title={siteName} href="/">{siteName}</a></h1>
+    {isHome ? (
+      <h1><a title={siteName} href="/">{siteName}</a></h1>
+    ) : (
+      <p><a title={siteName} href="/">{siteName}</a></p>
+    )}
   </div>
   <nav>
     {nav.map((item) => (
