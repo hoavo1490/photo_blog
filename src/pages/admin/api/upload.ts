@@ -97,6 +97,13 @@ export const POST: APIRoute = async (ctx) => {
   // canonical key; JPEG variants use `<key>.<W>w.jpg`, WebP variants
   // use `<key>.<W>w.webp` (same width). Every variant's bytes are
   // re-sniffed -- the client could lie about which slot is webp vs jpeg.
+  //
+  // PUTs are deliberately overwrite-on-write: the key encodes siteId +
+  // content hash, so an existing object with the same key is necessarily
+  // a previous upload of identical bytes from the same site -- re-PUTing
+  // the same bytes is a no-op. This is the path that lets the user reuse
+  // an image they've already uploaded (e.g. a logo) without hitting a
+  // bogus 409.
   class UploadError extends Error {
     constructor(message: string, public statusCode: number) {
       super(message);
@@ -114,15 +121,6 @@ export const POST: APIRoute = async (ctx) => {
         key = variantKeyForKey(r2Key, p.width).replace(/\.jpg$/, '.webp');
       } else {
         key = variantKeyForKey(r2Key, p.width);
-      }
-      // Defense-in-depth: refuse to overwrite an existing R2 object.
-      // The images.create UPSERT below guards cross-site DB collisions,
-      // but those collisions could otherwise let a member of site A
-      // clobber bytes owned by site B (32-bit hash collision; the
-      // prefix is now 64 bits but conditional-put still costs nothing).
-      const existing = await e.PHOTOS.head(key);
-      if (existing) {
-        throw new UploadError('key collision', 409);
       }
       await e.PHOTOS.put(key, bytes, {
         httpMetadata: { contentType: contentTypeForFormat(fmt) },

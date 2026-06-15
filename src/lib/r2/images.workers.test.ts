@@ -101,6 +101,28 @@ describe('uploadImage', () => {
     );
     expect(result.publicUrl).toBe(publicUrlForKey(result.r2Key, env));
   });
+
+  it('is idempotent: uploading the same bytes twice from the same site succeeds and yields the same key', async () => {
+    // Repro for the 409 a user hit when reusing a photo they had already
+    // uploaded (e.g. a logo). The key is content-addressed and scoped
+    // by siteId, so the second PUT just overwrites byte-identical bytes
+    // -- it must not error. The API route used to HEAD the key first
+    // and throw "key collision" 409; that guard was wrong.
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+    const input = {
+      siteId: SITE,
+      originalName: 'logo.jpg',
+      bytes,
+      contentType: 'image/jpeg' as const,
+    };
+    const first = await uploadImage(env.PHOTOS, input, env);
+    const second = await uploadImage(env.PHOTOS, input, env);
+    expect(second.r2Key).toBe(first.r2Key);
+    const obj = await env.PHOTOS.get(second.r2Key);
+    expect(obj).not.toBeNull();
+    const got = new Uint8Array(await obj!.arrayBuffer());
+    expect(Array.from(got)).toEqual(Array.from(bytes));
+  });
 });
 
 describe('publicUrlForKey', () => {
