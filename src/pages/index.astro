@@ -91,10 +91,6 @@ const lcpAvifSrcset = latest && latest.r2Key && latest.hasAvif && latest.variant
                   post={c.post}
                   cover={c.cover}
                   description={c.desc}
-                  // The newest card is the LCP candidate; cards 1-5 are
-                  // likely above the fold on mobile (1 col) and desktop
-                  // (2 rows of 3). Eager-load them so they paint with
-                  // the page instead of popping in via lazy heuristics.
                   priority={i === 0}
                   aboveFold={i > 0 && i < 6}
                   variantWidths={c.variantWidths}

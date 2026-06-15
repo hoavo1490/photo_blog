@@ -57,14 +57,11 @@ const initialCoverUrl = initial.coverUrl ?? '';
       <button type="button" class="tab" data-tab="preview">preview</button>
     </div>
 
+    {/* Milkdown handles bold/italic/H2/H3/quote/list/link via its
+        slash menu + inline toolbar. We only keep the photo button
+        (which kicks off our compress + upload pipeline) plus the
+        write/preview tab switch. */}
     <div class="toolbar" id="md-toolbar">
-      <button type="button" data-md="bold" title="bold (Cmd+B)"><b>B</b></button>
-      <button type="button" data-md="italic" title="italic (Cmd+I)"><i>I</i></button>
-      <button type="button" data-md="h2" title="heading 2">H2</button>
-      <button type="button" data-md="h3" title="heading 3">H3</button>
-      <button type="button" data-md="link" title="link">link</button>
-      <button type="button" data-md="list" title="bullet list">• list</button>
-      <button type="button" data-md="quote" title="quote">&gt; quote</button>
       <span class="toolbar-spacer"></span>
       <label class="toolbar-photo">
         <span>📷 photo</span>
@@ -74,8 +71,13 @@ const initialCoverUrl = initial.coverUrl ?? '';
 
     <div id="image-status" class="upload-status"></div>
 
+    {/* Milkdown mounts onto this div. The textarea below stays in the
+        form for back-compat with FormData and as a no-JS fallback;
+        the editor mirrors its content into the textarea on every
+        change. */}
+    <div id="milkdown-editor" class="milkdown-host"></div>
     <textarea id="body-area" name="body" rows="14"
-      placeholder="write here…" style="min-height: 360px;">{initial.body ?? ''}</textarea>
+      placeholder="write here…" hidden>{initial.body ?? ''}</textarea>
 
     <div id="preview-area" class="preview-area" style="display:none;">
       <div class="preview-placeholder">nothing to preview yet…</div>
@@ -149,6 +151,32 @@ const initialCoverUrl = initial.coverUrl ?? '';
   }
   .toolbar-photo:hover { background: #f0f0f0; }
 
+  .milkdown-host {
+    min-height: 360px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  /* Milkdown's default editor area: trim the chrome so it fits in our
+     form aesthetic. */
+  .milkdown-host milkdown-editor,
+  .milkdown-host .milkdown {
+    background: var(--bg-elev);
+  }
+  .milkdown-host .ProseMirror {
+    padding: 14px 16px;
+    min-height: 340px;
+    outline: none;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  .milkdown-host .ProseMirror p { margin: 8px 0; }
+  .milkdown-host .ProseMirror h1 { font-size: 22px; margin: 16px 0 8px; }
+  .milkdown-host .ProseMirror h2 { font-size: 20px; margin: 14px 0 6px; }
+  .milkdown-host .ProseMirror h3 { font-size: 18px; margin: 12px 0 6px; }
+  .milkdown-host .ProseMirror img { max-width: 100%; height: auto; }
+
   .preview-area {
     min-height: 360px; padding: 14px 16px;
     background: var(--bg-elev);
@@ -167,10 +195,13 @@ const initialCoverUrl = initial.coverUrl ?? '';
 </style>
 
 <script>
+  import type { BodyEditor } from '../scripts/body-editor';
+
   const form = document.getElementById('post-form') as HTMLFormElement;
   const picker = document.getElementById('image-picker') as HTMLInputElement;
   const status = document.getElementById('image-status') as HTMLElement;
   const body = document.getElementById('body-area') as HTMLTextAreaElement;
+  const editorMount = document.getElementById('milkdown-editor') as HTMLElement;
   const previewArea = document.getElementById('preview-area') as HTMLElement;
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
   const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement | null;
@@ -183,6 +214,33 @@ const initialCoverUrl = initial.coverUrl ?? '';
   const coverStatus = document.getElementById('cover-status') as HTMLElement;
   const coverUploadText = document.getElementById('cover-upload-text') as HTMLElement;
   const tabs = document.querySelectorAll<HTMLButtonElement>('.tab');
+
+  // ─── editor: Milkdown WYSIWYG-markdown, falls back to textarea ──────────
+  // The textarea stays in the form so FormData still works; the editor
+  // mirrors its content there on every change. While Milkdown loads
+  // (async), the form is functional via the textarea alone.
+  let editor: BodyEditor | null = null;
+  const initialBody = body.value;
+  (async () => {
+    try {
+      const { mountMilkdownEditor } = await import('../scripts/body-editor-milkdown');
+      editor = await mountMilkdownEditor(editorMount, initialBody, (md) => {
+        body.value = md;
+      });
+    } catch (err) {
+      // Milkdown failed to load. Reveal the textarea so the user can
+      // still write. This is the no-JS / load-error escape hatch.
+      console.error('Editor failed to load, falling back to textarea:', err);
+      body.hidden = false;
+      editorMount.style.display = 'none';
+      const { mountTextareaEditor } = await import('../scripts/body-editor');
+      editor = mountTextareaEditor(body, initialBody);
+    }
+  })();
+
+  // Pulls the current markdown -- prefers the live editor, falls back
+  // to the textarea when the editor isn't mounted yet.
+  const currentBody = () => editor?.getMarkdown() ?? body.value;
 
   const siteId = form.dataset.siteId!;
   const postId = form.dataset.postId || null;
@@ -246,14 +304,7 @@ const initialCoverUrl = initial.coverUrl ?? '';
     return await r.json();
   }
 
-  // ─── body images (inserted into markdown) ───────────────────────────────
-  function insertAtCursor(text: string) {
-    const at = body.selectionStart ?? body.value.length;
-    body.value = body.value.slice(0, at) + text + body.value.slice(at);
-    body.selectionStart = body.selectionEnd = at + text.length;
-    body.focus();
-  }
-
+  // ─── body images (inserted into markdown via the editor) ───────────────
   picker.addEventListener('change', async () => {
     const files = Array.from(picker.files ?? []);
     picker.value = '';
@@ -264,7 +315,15 @@ const initialCoverUrl = initial.coverUrl ?? '';
       // Insert with empty alt -- the auto-filename is meaningless to
       // screen readers and the renderer strips slug-shaped alts anyway.
       // Authors can type caption text into the brackets after insertion.
-      insertAtCursor(`\n![](image:${r.id})\n`);
+      const token = `\n![](image:${r.id})\n`;
+      if (editor) {
+        editor.insertAtCursor(token);
+        // Keep the hidden textarea in sync so FormData stays current.
+        body.value = editor.getMarkdown();
+      } else {
+        // Editor not mounted yet; append directly to the textarea.
+        body.value += token;
+      }
       status.textContent = `inserted ${file.name}`;
     }
   });
@@ -294,59 +353,8 @@ const initialCoverUrl = initial.coverUrl ?? '';
   });
   coverRemove.addEventListener('click', () => clearCover());
 
-  // ─── markdown toolbar ───────────────────────────────────────────────────
-  function getSelection() {
-    return { start: body.selectionStart, end: body.selectionEnd, value: body.value };
-  }
-  function setSelection(start: number, end: number) {
-    body.selectionStart = start; body.selectionEnd = end; body.focus();
-  }
-  function wrap(prefix: string, suffix = prefix) {
-    const { start, end, value } = getSelection();
-    const selected = value.slice(start, end) || 'text';
-    const replacement = prefix + selected + suffix;
-    body.value = value.slice(0, start) + replacement + value.slice(end);
-    setSelection(start + prefix.length, start + prefix.length + selected.length);
-  }
-  function prefixLines(linePrefix: string) {
-    const { start, end, value } = getSelection();
-    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
-    const lineEnd = end + (value.indexOf('\n', end) === -1 ? value.length - end : 0);
-    const block = value.slice(lineStart, lineEnd === lineStart ? value.length : lineEnd);
-    const replaced = block.split('\n').map((l) => linePrefix + l).join('\n');
-    body.value = value.slice(0, lineStart) + replaced + value.slice(lineStart + block.length);
-    setSelection(lineStart, lineStart + replaced.length);
-  }
-  function insertLink() {
-    const url = prompt('URL?');
-    if (!url) return;
-    const { start, end, value } = getSelection();
-    const text = value.slice(start, end) || 'link';
-    const replacement = `[${text}](${url})`;
-    body.value = value.slice(0, start) + replacement + value.slice(end);
-    setSelection(start + 1, start + 1 + text.length);
-  }
-
-  toolbar.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-md]');
-    if (!btn) return;
-    const cmd = btn.dataset.md;
-    switch (cmd) {
-      case 'bold':   wrap('**'); break;
-      case 'italic': wrap('*'); break;
-      case 'h2':     prefixLines('## '); break;
-      case 'h3':     prefixLines('### '); break;
-      case 'list':   prefixLines('- '); break;
-      case 'quote':  prefixLines('> '); break;
-      case 'link':   insertLink(); break;
-    }
-  });
-
-  body.addEventListener('keydown', (e) => {
-    if (!(e.metaKey || e.ctrlKey)) return;
-    if (e.key === 'b') { e.preventDefault(); wrap('**'); }
-    else if (e.key === 'i') { e.preventDefault(); wrap('*'); }
-  });
+  // (Milkdown handles markdown formatting via its slash menu + inline
+  // toolbar. The old ad-hoc wrap/prefix/insertLink helpers are gone.)
 
   // ─── write / preview tabs ───────────────────────────────────────────────
   async function renderPreview() {
@@ -354,7 +362,7 @@ const initialCoverUrl = initial.coverUrl ?? '';
     const r = await fetch('/admin/api/preview', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ siteId, body: body.value }),
+      body: JSON.stringify({ siteId, body: currentBody() }),
     });
     if (!r.ok) { previewArea.innerHTML = `<div class="preview-placeholder">preview failed</div>`; return; }
     const html = await r.text();
@@ -363,13 +371,13 @@ const initialCoverUrl = initial.coverUrl ?? '';
   tabs.forEach((t) => t.addEventListener('click', async () => {
     tabs.forEach((x) => x.classList.toggle('active', x === t));
     if (t.dataset.tab === 'preview') {
-      body.style.display = 'none';
+      editorMount.style.display = 'none';
       toolbar.style.display = 'none';
       previewArea.style.display = '';
       await renderPreview();
     } else {
       previewArea.style.display = 'none';
-      body.style.display = '';
+      editorMount.style.display = '';
       toolbar.style.display = '';
     }
   }));
@@ -384,7 +392,10 @@ const initialCoverUrl = initial.coverUrl ?? '';
       title: fd.get('title'),
       slug: fd.get('slug') || undefined,
       date: fd.get('date'),
-      body: fd.get('body') ?? '',
+      // Read directly from the editor so we never miss a Milkdown change
+      // that hasn't been mirrored back to the textarea yet (e.g. if the
+      // user smashes save mid-typing).
+      body: currentBody(),
       tagNames: String(fd.get('tags') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
       coverImageId: coverIdInput.value || null,
     };
