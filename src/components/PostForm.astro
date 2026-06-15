@@ -65,6 +65,9 @@ const tagsChipText = formatTagsChip(initialTagNames);
         : <span class="chip-icon" id="chip-cover-icon">🖼</span>}
       <span class="chip-text" id="chip-cover-text">{initialCoverUrl ? 'cover' : '+ cover'}</span>
     </button>
+    <button type="button" class="chip" data-sheet="more" id="chip-more" title="more">
+      <span class="chip-text">⋯</span>
+    </button>
   </div>
 
   {/* Hidden inputs for the values the chips display. The form serializes
@@ -136,7 +139,6 @@ const tagsChipText = formatTagsChip(initialTagNames);
     </label>
     <span class="tb-spacer"></span>
     <button type="button" class="tb" data-cmd="preview" id="preview-toggle" title="preview" aria-pressed="false">👁</button>
-    <button type="button" class="tb" data-sheet="more" title="more">⚙</button>
   </div>
 </form>
 
@@ -440,11 +442,12 @@ const tagsChipText = formatTagsChip(initialTagNames);
     ['cover', document.getElementById('sheet-cover') as HTMLElement],
     ['more', document.getElementById('sheet-more') as HTMLElement],
   ]);
+  const chipMore = document.getElementById('chip-more') as HTMLButtonElement;
   const chipBySheet = new Map<string, HTMLButtonElement | null>([
     ['date', chipDate],
     ['tags', chipTags],
     ['cover', chipCover],
-    ['more', null],
+    ['more', chipMore],
   ]);
 
   function openSheet(name: string) {
