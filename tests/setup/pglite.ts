@@ -33,7 +33,7 @@ export async function clearAllTables(driver: PgliteDriver): Promise<void> {
   // Single statement so deletes happen in the right FK order (CASCADE).
   await driver.exec(
     'TRUNCATE TABLE ' +
-      'sessions, post_tags, tags, posts, images, ' +
+      'sessions, post_tags, tags, posts, images, pages, ' +
       'site_domain_history, site_members, sites, users ' +
       'RESTART IDENTITY CASCADE',
   );

@@ -1,7 +1,32 @@
 ---
+import { env } from 'cloudflare:workers';
 import PageLayout from '../layouts/PageLayout.astro';
+import * as pages from '../lib/db/pages';
+import { buildImageResolver } from '../lib/render';
+import { rewriteImageTokens } from '../lib/markdown';
+import { sanitizePostHtml } from '../lib/sanitize-html';
+import { marked } from 'marked';
+
+const driver = Astro.locals.db!;
+const tenant = Astro.locals.tenant!;
+const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
+
+// Read the about page body from the DB. Falls back to an empty state
+// when the author hasn't written one yet -- visitors don't 404.
+const page = await pages.findPage(driver, { siteId: tenant.id, slug: 'about' });
+const rawBody = page?.body ?? '';
+
+// Same render pipeline as posts: resolve image:<uuid> tokens to public
+// URLs, parse markdown, then sanitize. The sanitizer keeps <picture>
+// + srcset intact.
+const tokenIds: string[] = [];
+for (const m of rawBody.matchAll(/\(image:([0-9a-f-]{36})\)/g)) tokenIds.push(m[1]);
+const resolver = await buildImageResolver(driver, tenant.id, tokenIds, env_);
+const rewritten = rewriteImageTokens(rawBody, resolver);
+const rendered = rawBody.trim()
+  ? sanitizePostHtml(await marked.parse(rewritten))
+  : '<p>—</p>';
 ---
 <PageLayout title="about" description="About Rio.">
-  <p>rio</p>
-  <p><a href="mailto:hoavo.dng@gmail.com">hoavo.dng@gmail.com</a></p>
+  <Fragment set:html={rendered} />
 </PageLayout>

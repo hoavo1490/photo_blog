@@ -1,0 +1,55 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageForm from '../../components/PageForm.astro';
+import type { SqlDriver } from '../../lib/db/driver';
+import * as pages from '../../lib/db/pages';
+import { publicUrlForKey, editorPreviewUrlForKey } from '../../lib/r2/images';
+import { allImageTokens } from '../../lib/markdown';
+
+const session = Astro.locals.session;
+if (!session) return Astro.redirect('/login');
+const driver = Astro.locals.db! as SqlDriver;
+
+const sites = await driver.query<{ id: string }>(
+  `SELECT s.id FROM sites s JOIN site_members m ON m.site_id = s.id
+   WHERE m.user_id = $1 ORDER BY m.added_at ASC LIMIT 1`,
+  [session.userId],
+);
+if (sites.length === 0) return new Response('No sites', { status: 403 });
+const siteId = sites[0].id;
+
+const page = await pages.findPage(driver, { siteId, slug: 'about' });
+const body = page?.body ?? '';
+
+// Resolve every `image:<uuid>` token in the body to its public URL so
+// the editor can render images inline. Mirrors the same flow as the
+// post edit route (src/pages/admin/edit/[id].astro).
+const bodyTokens = allImageTokens(body);
+const r2Env = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
+type ImageEntry = { id: string; url: string };
+const bodyImages: ImageEntry[] = [];
+if (bodyTokens.length > 0) {
+  const placeholders = bodyTokens.map((_, i) => `$${i + 2}`).join(',');
+  const rows = await driver.query<{ id: string; r2_key: string; variant_widths: number[] | null }>(
+    `SELECT id, r2_key, variant_widths FROM images WHERE site_id = $1 AND id IN (${placeholders})`,
+    [siteId, ...bodyTokens],
+  );
+  for (const r of rows) {
+    const widths = (r.variant_widths ?? []).map((n) => typeof n === 'string' ? parseInt(n, 10) : n);
+    const editorUrl = editorPreviewUrlForKey(r.r2_key, widths);
+    const canonicalUrl = publicUrlForKey(r.r2_key, r2Env);
+    if (editorUrl !== canonicalUrl) bodyImages.push({ id: r.id, url: canonicalUrl });
+    bodyImages.push({ id: r.id, url: editorUrl });
+  }
+}
+---
+<AdminLayout title="about" bare>
+  <PageForm
+    siteId={siteId}
+    slug="about"
+    pageTitle="About"
+    body={body}
+    bodyImages={bodyImages}
+  />
+</AdminLayout>

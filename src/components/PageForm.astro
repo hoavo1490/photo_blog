@@ -1,0 +1,307 @@
+---
+// Editor for non-post pages (about, contact, legal). Trimmed version
+// of PostForm: no date / tags / cover / slug chip row. The slug is
+// fixed by the route ("/admin/about" -> slug "about"). Reuses the
+// same Crepe-based body editor and image upload pipeline, including
+// image:<uuid> token expansion / collapse so the page body stays
+// portable across re-uploads and domain changes.
+
+interface Props {
+  siteId: string;
+  slug: string;
+  /** Human label shown in the editor header. */
+  pageTitle: string;
+  /** The current body markdown (with `image:<uuid>` tokens). */
+  body: string;
+  /** Pre-resolved {id, url} list for every body image token, so the
+   *  editor can render images inline on mount. */
+  bodyImages: ReadonlyArray<{ id: string; url: string }>;
+}
+const { siteId, slug, pageTitle, body, bodyImages } = Astro.props;
+---
+<form
+  id="page-form"
+  data-site-id={siteId}
+  data-slug={slug}
+  data-body-images={JSON.stringify(bodyImages)}
+>
+  <header class="editor-header">
+    <button type="button" class="icon-btn close-btn" onclick="history.back()" aria-label="close">✕</button>
+    <span class="page-title">{pageTitle}</span>
+    <button type="submit" class="primary publish-btn" id="save-btn">Save</button>
+  </header>
+
+  <div id="milkdown-editor" class="milkdown-host"></div>
+  <textarea id="body-area" name="body" rows="14" placeholder="write here…" hidden>{body}</textarea>
+
+  <div class="bottom-toolbar" id="bottom-toolbar">
+    <button type="button" class="tb" data-cmd="bold" title="bold"><strong>B</strong></button>
+    <button type="button" class="tb" data-cmd="italic" title="italic"><em>I</em></button>
+    <button type="button" class="tb" data-cmd="blockquote" title="quote">❝</button>
+    <button type="button" class="tb" data-cmd="list" title="list">•</button>
+    <button type="button" class="tb" data-cmd="link" title="link">🔗</button>
+    <label class="tb tb-image" title="image">
+      <span>🖼</span>
+      <input id="image-picker" type="file" accept="image/*" multiple style="display:none;" />
+    </label>
+    <span class="tb-spacer"></span>
+  </div>
+</form>
+
+<style>
+  #page-form {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+  }
+  .editor-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: calc(var(--safe-top) + 12px) 20px 12px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .icon-btn {
+    width: 40px; height: 40px; min-height: 0; padding: 0;
+    border: none; background: transparent;
+    font-size: 18px; line-height: 1; color: var(--muted);
+    border-radius: 8px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background-color 180ms ease, color 180ms ease;
+  }
+  .icon-btn:hover { background: var(--bg-sunken); color: var(--fg); }
+  .icon-btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .page-title {
+    flex: 1; min-width: 0;
+    font-size: 22px; font-weight: 600; letter-spacing: -0.01em;
+    color: var(--fg);
+    padding: 8px 10px;
+  }
+  .publish-btn {
+    min-height: 0; height: 36px; padding: 6px 18px;
+    font-size: 14px; font-weight: 600;
+    border-radius: 999px;
+    background: var(--accent); color: var(--accent-fg);
+    border: 1px solid var(--accent);
+    cursor: pointer;
+    transition: background-color 180ms ease, opacity 180ms ease;
+  }
+  .publish-btn:hover { background: #27272a; }
+  .publish-btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .publish-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .milkdown-host {
+    flex: 1;
+    background: var(--bg-elev);
+    overflow-y: auto;
+  }
+  .milkdown-host :global(.ProseMirror) {
+    max-width: 720px; margin: 0 auto;
+    padding: 32px 20px 96px;
+    min-height: 100%;
+    outline: none;
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--fg);
+    box-sizing: border-box;
+  }
+  .milkdown-host :global(.ProseMirror p) { margin: 0 0 16px; }
+  .milkdown-host :global(.ProseMirror h1) { font-size: 28px; font-weight: 700; margin: 28px 0 12px; letter-spacing: -0.015em; }
+  .milkdown-host :global(.ProseMirror h2) { font-size: 22px; font-weight: 700; margin: 24px 0 10px; }
+  .milkdown-host :global(.ProseMirror h3) { font-size: 18px; font-weight: 600; margin: 20px 0 8px; }
+  .milkdown-host :global(.ProseMirror a) {
+    color: var(--fg);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .milkdown-host :global(.milkdown-image-block) {
+    display: block; width: 100%; margin: 24px 0;
+  }
+  .milkdown-host :global(.milkdown-image-block .image-wrapper) {
+    margin: 0 auto !important; max-width: 100%;
+  }
+  .milkdown-host :global(.milkdown-image-block .image-wrapper img) {
+    max-width: 100%; height: auto; min-height: 0 !important;
+    object-fit: contain !important; display: block; border-radius: 4px;
+  }
+  .milkdown-host :global(milkdown-block-handle),
+  .milkdown-host :global(.milkdown-block-handle),
+  .milkdown-host :global(milkdown-toolbar),
+  .milkdown-host :global(.milkdown-toolbar),
+  .milkdown-host :global(milkdown-tooltip),
+  .milkdown-host :global(.milkdown-tooltip) {
+    display: none !important;
+  }
+
+  .bottom-toolbar {
+    position: sticky; bottom: 0;
+    display: flex; align-items: center; gap: 2px;
+    padding: 8px 12px calc(8px + var(--safe-bottom));
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border);
+    z-index: 6;
+  }
+  .tb {
+    width: 40px; height: 40px; min-height: 0; padding: 0;
+    border: none; background: transparent;
+    border-radius: 8px;
+    font-size: 16px; line-height: 1; color: var(--fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background-color 180ms ease;
+  }
+  .tb:hover { background: var(--bg-sunken); }
+  .tb-spacer { flex: 1; }
+  .tb-image { cursor: pointer; }
+</style>
+
+<script>
+  import type { BodyEditor } from '../scripts/body-editor';
+  import {
+    buildImageMapping,
+    expandImageTokens,
+    collapseImageTokens,
+    rememberImage,
+  } from '../scripts/image-tokens';
+
+  const form = document.getElementById('page-form') as HTMLFormElement;
+  const body = document.getElementById('body-area') as HTMLTextAreaElement;
+  const editorMount = document.getElementById('milkdown-editor') as HTMLElement;
+  const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
+  const bottomToolbar = document.getElementById('bottom-toolbar') as HTMLElement;
+  const imagePicker = document.getElementById('image-picker') as HTMLInputElement;
+
+  const siteId = form.dataset.siteId!;
+  const slug = form.dataset.slug!;
+
+  // ─── editor mount + token expand/collapse (shared with PostForm) ────
+  let editor: BodyEditor | null = null;
+  const initialBodyRaw = body.value;
+  const bodyImagesRaw = JSON.parse(form.dataset.bodyImages || '[]') as Array<{ id: string; url: string }>;
+  const imageMap = buildImageMapping(bodyImagesRaw);
+  const initialBodyExpanded = expandImageTokens(initialBodyRaw, imageMap);
+  (async () => {
+    try {
+      const { mountMilkdownEditor } = await import('../scripts/body-editor-milkdown');
+      editor = await mountMilkdownEditor(
+        editorMount,
+        initialBodyExpanded,
+        (md) => { body.value = collapseImageTokens(md, imageMap); },
+        {
+          uploadImage: compressAndUpload,
+          onImageUploaded: (entry) => {
+            rememberImage(imageMap, { id: entry.id, url: entry.url });
+            if (entry.editorUrl && entry.editorUrl !== entry.url) {
+              rememberImage(imageMap, { id: entry.id, url: entry.editorUrl });
+            }
+          },
+        },
+      );
+    } catch (err) {
+      console.error('Editor failed to load, falling back to textarea:', err);
+      body.hidden = false;
+      editorMount.style.display = 'none';
+      const { mountTextareaEditor } = await import('../scripts/body-editor');
+      editor = mountTextareaEditor(body, initialBodyRaw);
+    }
+  })();
+
+  const currentBody = () => {
+    if (editor) return collapseImageTokens(editor.getMarkdown(), imageMap);
+    return body.value;
+  };
+
+  // ─── image compression + upload (same shape as PostForm) ────────────
+  const VARIANT_TARGETS = [400, 800, 1200, 1600, 2400];
+  async function resizeAt(bitmap: ImageBitmap, targetWidth: number, type: string, quality = 0.85): Promise<{ blob: Blob; width: number; height: number } | null> {
+    const ratio = Math.min(1, targetWidth / bitmap.width);
+    const w = Math.round(bitmap.width * ratio);
+    const h = Math.round(bitmap.height * ratio);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, type, quality));
+    return blob ? { blob, width: w, height: h } : null;
+  }
+  async function compressAndUpload(file: File): Promise<{ id: string; url: string; editorUrl?: string } | null> {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const wantWidths = VARIANT_TARGETS.filter((w) => w <= bitmap.width);
+    if (wantWidths.length === 0) wantWidths.push(bitmap.width);
+    const jpegResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/jpeg', 0.80)));
+    const webpResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/webp', 0.80)));
+    const jpegs = jpegResults.filter((r): r is NonNullable<typeof r> => r !== null);
+    if (jpegs.length === 0) return null;
+    const webps = webpResults.filter((r): r is NonNullable<typeof r> => r !== null);
+    jpegs.sort((a, b) => b.width - a.width);
+    webps.sort((a, b) => b.width - a.width);
+    const primary = jpegs[0];
+    const fd = new FormData();
+    fd.append('siteId', siteId);
+    fd.append('width', String(primary.width));
+    fd.append('height', String(primary.height));
+    const stem = file.name.replace(/\.[^.]+$/, '');
+    for (const v of jpegs) fd.append(`file_${v.width}`, v.blob, `${stem}.${v.width}w.jpg`);
+    for (const v of webps) fd.append(`file_${v.width}_webp`, v.blob, `${stem}.${v.width}w.webp`);
+    const r = await fetch('/admin/api/upload', { method: 'POST', body: fd });
+    if (!r.ok) return null;
+    return await r.json();
+  }
+
+  // ─── bottom toolbar bindings ────────────────────────────────────────
+  bottomToolbar.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-cmd]');
+    if (!btn || !editor) return;
+    switch (btn.dataset.cmd) {
+      case 'bold': editor.toggleBold(); break;
+      case 'italic': editor.toggleItalic(); break;
+      case 'blockquote': editor.toggleBlockquote(); break;
+      case 'list': editor.toggleBulletList(); break;
+      case 'link': {
+        const url = prompt('Link URL');
+        if (url) editor.insertLink(url);
+        break;
+      }
+    }
+  });
+
+  imagePicker.addEventListener('change', async () => {
+    const files = Array.from(imagePicker.files ?? []);
+    imagePicker.value = '';
+    for (const file of files) {
+      const r = await compressAndUpload(file);
+      if (!r) continue;
+      const renderUrl = r.editorUrl ?? r.url;
+      if (renderUrl !== r.url) rememberImage(imageMap, { id: r.id, url: r.url });
+      rememberImage(imageMap, { id: r.id, url: renderUrl });
+      if (editor) {
+        editor.insertImageBlock(renderUrl);
+        body.value = collapseImageTokens(editor.getMarkdown(), imageMap);
+      }
+    }
+  });
+
+  // ─── save ──────────────────────────────────────────────────────────
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    saveBtn.disabled = true;
+    const orig = saveBtn.textContent;
+    saveBtn.textContent = 'saving…';
+    const r = await fetch('/admin/api/save-page', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ siteId, slug, body: currentBody() }),
+    });
+    if (!r.ok) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = orig;
+      alert('save failed: ' + await r.text());
+      return;
+    }
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Saved';
+    setTimeout(() => { saveBtn.textContent = orig; }, 1200);
+  });
+</script>
