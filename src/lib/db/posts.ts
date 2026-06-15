@@ -187,6 +187,10 @@ export interface UpdatePostInput {
   body?: string;
   description?: string | null;
   coverImageId?: string | null;
+  /** When provided, restamps published_at. The editor's date chip uses
+   *  this to let authors retroactively change a post's publish day; the
+   *  /YYYY/MM/DD/<slug> URL changes with it (by design). */
+  publishedAt?: Date;
 }
 
 export async function update(driver: SqlDriver, args: UpdatePostInput): Promise<Post | null> {
@@ -209,6 +213,10 @@ export async function update(driver: SqlDriver, args: UpdatePostInput): Promise<
   if (args.coverImageId !== undefined) {
     sets.push(`cover_image_id = $${params.length + 1}`);
     params.push(args.coverImageId);
+  }
+  if (args.publishedAt !== undefined) {
+    sets.push(`published_at = $${params.length + 1}::timestamptz`);
+    params.push(args.publishedAt.toISOString());
   }
   if (sets.length === 0) return findById(driver, { siteId: args.siteId, id: args.id });
 

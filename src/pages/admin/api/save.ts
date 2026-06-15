@@ -50,17 +50,22 @@ export const POST: APIRoute = async (ctx) => {
     await posts.publish(driver, { siteId: b.siteId, id: postId, publishedAt });
   } else {
     if (!b.postId) return new Response('postId required for edit', { status: 400 });
+    // Only published posts carry a published_at, and only the date chip
+    // in the editor surfaces it. When the editor sends a date for an
+    // already-published post, stamp published_at to that day at noon UTC
+    // (matching the createDraft -> publish path). For drafts we DO NOT
+    // restamp -- editing a draft must not silently publish it.
+    const existing = await posts.findById(driver, { siteId: b.siteId, id: b.postId });
+    if (!existing) return new Response('not found', { status: 404 });
+    const publishedAt = (b.date && existing.status === 'published')
+      ? new Date(`${b.date}T12:00:00Z`)
+      : undefined;
     const updated = await posts.update(driver, {
       siteId: b.siteId, id: b.postId, title: b.title, body: b.body,
-      coverImageId,
+      coverImageId, publishedAt,
     });
     if (!updated) return new Response('not found', { status: 404 });
     postId = updated.id;
-    // On edit we deliberately do NOT call posts.publish: publish is a
-    // state transition, not a re-save. The form's date input always
-    // defaults to today, so passing it through here would silently
-    // move published_at on every edit and break the /YYYY/MM/DD/slug
-    // URLs of every previously published post.
   }
 
   // Replace tag set.

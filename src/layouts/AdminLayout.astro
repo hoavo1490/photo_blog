@@ -20,9 +20,19 @@ const session = Astro.locals.session;
     <link rel="icon" href="data:," />
     <style is:global>
       :root {
-        --bg: #fafafa; --bg-elev: #fff; --fg: #111; --muted: #777;
-        --border: #e3e3e3; --accent: #111; --accent-fg: #fff;
-        --danger: #c0392b;
+        /* Zinc palette: high-contrast text on near-white, subtle borders,
+           muted text that still meets WCAG 4.5:1 on white. */
+        --bg: #fafafa;
+        --bg-elev: #ffffff;
+        --bg-sunken: #f4f4f5;
+        --fg: #09090b;        /* zinc-950 */
+        --muted: #52525b;     /* zinc-600 -- 7.5:1 on white */
+        --muted-2: #a1a1aa;   /* zinc-400, decorative only */
+        --border: #e4e4e7;    /* zinc-200 */
+        --border-strong: #d4d4d8; /* zinc-300 */
+        --accent: #18181b;    /* zinc-900 */
+        --accent-fg: #ffffff;
+        --danger: #dc2626;    /* red-600 */
         --safe-bottom: env(safe-area-inset-bottom);
         --safe-top: env(safe-area-inset-top);
       }

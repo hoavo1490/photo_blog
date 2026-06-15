@@ -78,24 +78,24 @@ describe('admin/api/save', () => {
     expect(reread?.publishedAt?.toISOString()).toBe(origPublishedAt.toISOString());
   });
 
-  it('editing a published post when the form has today (the PostForm default) does not move published_at', async () => {
-    // Repro for the actual bug: PostForm.astro line 10 defaults the date
-    // input to `today` when initial.publishedAt is missing in the partial.
-    // If a caller submits {date: today} for an already-published post, we
-    // must NOT silently re-stamp published_at.
+  it('editing a published post with a NEW date moves published_at to that date', async () => {
+    // The new chip-based editor only sends a `date` value the user
+    // explicitly chose (the chip is pre-populated from the post's actual
+    // published_at, not today). So passing the date through to
+    // published_at is now correct -- a date in the payload means the
+    // author wants the post stamped that day.
     const created = await posts.createDraft(driver, { siteId, slug: 'p', title: 'T', body: '' });
     const origPublishedAt = new Date('2023-11-22T12:00:00Z');
     await posts.publish(driver, { siteId, id: created.id, publishedAt: origPublishedAt });
 
-    const today = new Date().toISOString().slice(0, 10);
     const res = await savePOST(makeCtx({
       mode: 'edit', postId: created.id, siteId,
-      title: 'T', body: 'body', date: today, tagNames: [],
+      title: 'T', body: 'body', date: '2024-06-06', tagNames: [],
     }));
     expect(res.status).toBe(200);
 
     const reread = await posts.findById(driver, { siteId, id: created.id });
-    expect(reread?.publishedAt?.toISOString()).toBe(origPublishedAt.toISOString());
+    expect(reread?.publishedAt?.toISOString()).toBe('2024-06-06T12:00:00.000Z');
   });
 
   it('editing a draft does not silently publish it', async () => {
