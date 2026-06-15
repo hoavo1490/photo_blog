@@ -6,7 +6,7 @@
 // Env overrides:
 //   RIO_GITHUB_ID         (default: prompts for it)
 //   RIO_GITHUB_LOGIN      (default: hoavo1490)
-//   SITE_CUSTOM_DOMAIN    (default: riovv.com)
+//   SITE_CUSTOM_DOMAIN    (default: hoavv.com)
 //   SITE_SLUG             (default: rio)
 //   SITE_NAME             (default: riovv)
 
@@ -22,7 +22,7 @@ if (!githubId) {
 }
 
 const githubLogin = process.env.RIO_GITHUB_LOGIN ?? 'hoavo1490';
-const customDomain = process.env.SITE_CUSTOM_DOMAIN ?? 'riovv.com';
+const customDomain = process.env.SITE_CUSTOM_DOMAIN ?? 'hoavv.com';
 const siteSlug = process.env.SITE_SLUG ?? 'rio';
 const siteName = process.env.SITE_NAME ?? 'riovv';
 
