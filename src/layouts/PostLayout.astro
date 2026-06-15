@@ -86,24 +86,41 @@ if (tagNames.length) jsonLd.keywords = tagNames.join(', ');
 <script>
   // Lazy-load the lightbox bundle (~20KB + photoswipe) out of the LCP
   // window. The dynamic import() splits into a separate Vite chunk;
-  // this outer script is tiny. Loads on requestIdleCallback (idle
-  // time after first paint) OR on first interaction with the article,
-  // whichever comes first -- so the lightbox is already initialized
-  // and image wrappers are in place by the time the user clicks.
-  let loaded = false;
-  const load = () => {
-    if (loaded) return;
-    loaded = true;
-    import('../scripts/lightbox');
+  // this outer script is tiny.
+  //
+  // Two triggers:
+  //   1. First user interaction with the article (pointerdown/touchstart)
+  //   2. requestIdleCallback after first paint, whichever wins.
+  //
+  // Re-runs on every Astro view-transition arrival via astro:page-load,
+  // so navigating from /post-A to /post-B (no full reload) still binds
+  // PhotoSwipe to the new <article>. initLightbox() is idempotent
+  // (guards via root.dataset.lightboxInited).
+  let bundlePromise: Promise<typeof import('../scripts/lightbox')> | null = null;
+  const loadBundle = () => (bundlePromise ??= import('../scripts/lightbox'));
+  const init = async () => {
+    const m = await loadBundle();
+    m.initLightbox();
   };
-  const article = document.querySelector('article .post');
-  if (article) {
+
+  const armPage = () => {
+    const article = document.querySelector('article .post');
+    if (!article) return;
     const events = ['pointerdown', 'touchstart'] as const;
-    events.forEach((e) => article.addEventListener(e, load, { once: true, passive: true }));
-  }
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(load, { timeout: 3000 });
-  } else {
-    setTimeout(load, 1500);
-  }
+    let armed = true;
+    const trigger = () => {
+      if (!armed) return;
+      armed = false;
+      init();
+    };
+    events.forEach((e) => article.addEventListener(e, trigger, { once: true, passive: true }));
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(trigger, { timeout: 3000 });
+    } else {
+      setTimeout(trigger, 1500);
+    }
+  };
+
+  armPage();
+  document.addEventListener('astro:page-load', armPage);
 </script>
