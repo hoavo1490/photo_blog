@@ -6,6 +6,8 @@ import {
   publicUrlForKey,
   deleteImage,
   readImageDimensions,
+  detectImageFormat,
+  contentTypeForFormat,
 } from './images';
 
 // `env.PHOTOS` is the Miniflare R2 binding configured in vitest.config.ts.
@@ -40,6 +42,20 @@ describe('keyFor', () => {
       bytes: new Uint8Array([4, 5, 6]),
     });
     expect(a).not.toBe(b);
+  });
+
+  it('uses a 16-hex content-hash prefix (64-bit collision resistance)', async () => {
+    // Was 8 hex chars (32-bit) -- feasible for a malicious member to
+    // brute-force a collision against another site's published key.
+    const key = await keyFor({
+      siteId: SITE,
+      originalName: 'pic.jpg',
+      bytes: new Uint8Array([1, 2, 3, 4]),
+    });
+    // .../YYYY/MM/DD/<hex>-pic.jpg -- pull the hex prefix.
+    const m = key.match(/\/([0-9a-f]+)-pic\.jpg$/);
+    expect(m).not.toBeNull();
+    expect(m![1].length).toBe(16);
   });
 
   it('normalizes weird filenames', async () => {
@@ -169,5 +185,62 @@ describe('readImageDimensions', () => {
 
   it('throws on garbage input', () => {
     expect(() => readImageDimensions(new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0]))).toThrow();
+  });
+});
+
+describe('detectImageFormat', () => {
+  it('detects JPEG magic bytes', () => {
+    expect(detectImageFormat(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBe('jpeg');
+  });
+
+  it('detects PNG magic bytes', () => {
+    expect(
+      detectImageFormat(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+    ).toBe('png');
+  });
+
+  it('detects GIF magic bytes (87a and 89a)', () => {
+    expect(detectImageFormat(new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]))).toBe('gif');
+    expect(detectImageFormat(new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]))).toBe('gif');
+  });
+
+  it('detects WebP', () => {
+    const b = new Uint8Array(12);
+    b.set([0x52, 0x49, 0x46, 0x46], 0);
+    b.set([0x57, 0x45, 0x42, 0x50], 8);
+    expect(detectImageFormat(b)).toBe('webp');
+  });
+
+  it('detects AVIF (still and sequence)', () => {
+    const b = new Uint8Array(12);
+    b.set([0x00, 0x00, 0x00, 0x20], 0);
+    b.set([0x66, 0x74, 0x79, 0x70], 4); // 'ftyp'
+    b.set([0x61, 0x76, 0x69, 0x66], 8); // 'avif'
+    expect(detectImageFormat(b)).toBe('avif');
+    b[11] = 0x73; // 'avis'
+    expect(detectImageFormat(b)).toBe('avif');
+  });
+
+  it('returns null for HTML (XSS payload bytes)', () => {
+    // `<!DOCTYPE html>...` -- the kind of file an attacker would upload
+    // with Content-Type: text/html. Must NOT detect as an image.
+    const html = new TextEncoder().encode('<!DOCTYPE html><script>alert(1)</script>');
+    expect(detectImageFormat(html)).toBeNull();
+  });
+
+  it('returns null for short / garbage input', () => {
+    expect(detectImageFormat(new Uint8Array([]))).toBeNull();
+    expect(detectImageFormat(new Uint8Array([0, 0, 0]))).toBeNull();
+    expect(detectImageFormat(new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x88, 0x61]))).toBeNull();
+  });
+});
+
+describe('contentTypeForFormat', () => {
+  it('maps every format to its IANA media type', () => {
+    expect(contentTypeForFormat('jpeg')).toBe('image/jpeg');
+    expect(contentTypeForFormat('png')).toBe('image/png');
+    expect(contentTypeForFormat('webp')).toBe('image/webp');
+    expect(contentTypeForFormat('gif')).toBe('image/gif');
+    expect(contentTypeForFormat('avif')).toBe('image/avif');
   });
 });

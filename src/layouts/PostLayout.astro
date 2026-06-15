@@ -4,6 +4,7 @@ import BaseLayout from './BaseLayout.astro';
 import { coverUrlFor, buildBodyImageResolver } from '../lib/render';
 import * as tagsRepo from '../lib/db/tags';
 import { firstParagraph, firstBodyImageInfo, rewriteImageTokens } from '../lib/markdown';
+import { sanitizePostHtml } from '../lib/sanitize-html';
 import type { Post } from '../lib/db/posts';
 import { marked } from 'marked';
 import { defaultAuthor, defaultSiteName } from '../data/nav';
@@ -25,7 +26,9 @@ const [bodyResolver, cover, postTags] = await Promise.all([
   tagsRepo.listForPost(driver, { siteId: tenant.id, postId: post.id }),
 ]);
 const rewritten = rewriteImageTokens(post.body, bodyResolver);
-const rendered = await marked.parse(rewritten);
+// marked.parse() passes raw HTML through. Sanitize before set:html so
+// hostile authors can't XSS readers.
+const rendered = sanitizePostHtml(await marked.parse(rewritten));
 const firstBodyImg = firstBodyImageInfo(post.body, bodyResolver);
 const dateStr = post.publishedAt ? post.publishedAt.toISOString().slice(0, 10) : '';
 const tagNames = postTags.map((t) => t.name);

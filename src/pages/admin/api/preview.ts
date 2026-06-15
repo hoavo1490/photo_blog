@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import { marked } from 'marked';
 import type { SqlDriver } from '../../../lib/db/driver';
 import { renderPostBody } from '../../../lib/render';
+import { sanitizePostHtml } from '../../../lib/sanitize-html';
 
 interface PreviewBody {
   siteId: string;
@@ -32,7 +33,10 @@ export const POST: APIRoute = async (ctx) => {
   const synthetic = { siteId: b.siteId, body: b.body ?? '' };
   const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
   const rewritten = await renderPostBody(driver, synthetic as never, env_);
-  const html = await marked.parse(rewritten);
+  // Mirror the public path: sanitize before returning HTML so the
+  // editor preview matches what publishes (and isn't an XSS vector
+  // against admins either).
+  const html = sanitizePostHtml(await marked.parse(rewritten));
   return new Response(html, {
     headers: { 'content-type': 'text/html; charset=utf-8' },
   });

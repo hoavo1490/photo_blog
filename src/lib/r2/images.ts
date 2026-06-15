@@ -3,11 +3,20 @@ import type { R2Bucket } from '@cloudflare/workers-types';
 // R2 image storage layer. The DB layer (`src/lib/db/images.ts`) tracks
 // metadata; this module owns the blob lifecycle and key conventions.
 //
-// Key layout: `<siteId>/YYYY/MM/DD/<8hex>-<safe-name>`. The 8-hex prefix
-// is the first 8 chars of the bytes' SHA-256, so re-uploading identical
-// content collapses onto the same key (idempotent PUT). The date segment
-// is purely for human navigation in the R2 dashboard -- the content hash
-// is what guarantees uniqueness within a site.
+// Key layout: `<siteId>/YYYY/MM/DD/<16hex>-<safe-name>`. The 16-hex
+// prefix is the first 16 chars of the bytes' SHA-256 (64 bits of
+// collision resistance), so re-uploading identical content collapses
+// onto the same key (idempotent PUT). The date segment is purely for
+// human navigation in the R2 dashboard -- the content hash is what
+// guarantees uniqueness within a site.
+//
+// History note: this prefix used to be 8 hex chars (32 bits), which
+// made cross-site collision attacks feasible -- an attacker who's a
+// member of any site could brute-force a payload that matched another
+// site's published key prefix. The DB UPSERT in `images.create`
+// already blocks cross-site row collisions, but R2 bytes were
+// overwritable until the upload endpoint also gained a `head()`
+// pre-check (see admin/api/upload.ts).
 
 export interface UploadInput {
   siteId: string;
@@ -57,14 +66,16 @@ async function contentHashHex(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', copy.buffer);
   const arr = new Uint8Array(digest);
   let hex = '';
+  // First 8 bytes -> 16 hex chars. 64 bits of collision resistance is
+  // enough that an attacker needs ~2^32 attempts to find a collision
+  // with a specific target key -- well above what's feasible.
   for (let i = 0; i < 8; i++) {
     hex += arr[i].toString(16).padStart(2, '0');
   }
-  // first 8 bytes -> 16 hex chars; we want first 8 hex chars only.
-  return hex.slice(0, 8);
+  return hex;
 }
 
-/** Canonical key: <siteId>/YYYY/MM/DD/<8hex>-<safe-name>. Deterministic
+/** Canonical key: <siteId>/YYYY/MM/DD/<16hex>-<safe-name>. Deterministic
  *  for fixed (siteId, bytes, originalName) within a UTC day. */
 export async function keyFor(input: {
   siteId: string;
@@ -131,6 +142,77 @@ export function publicUrlForKey(
  *  callers don't need to guard. */
 export async function deleteImage(bucket: R2Bucket, key: string): Promise<void> {
   await bucket.delete(key);
+}
+
+/** Image format detected from raw bytes. */
+export type ImageFormat = 'jpeg' | 'png' | 'webp' | 'gif' | 'avif';
+
+/** Detect image format from magic bytes. Returns null when the bytes
+ *  don't match a known image format. Strict: we only allow what we
+ *  actually serve back, because the `/img/<key>` route echoes whatever
+ *  Content-Type R2 has -- a fake `text/html` becomes stored XSS. */
+export function detectImageFormat(bytes: Uint8Array): ImageFormat | null {
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return 'png';
+  }
+  // GIF: 'GIF87a' or 'GIF89a'
+  if (
+    bytes.length >= 6 &&
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x38 &&
+    (bytes[4] === 0x37 || bytes[4] === 0x39) &&
+    bytes[5] === 0x61
+  ) {
+    return 'gif';
+  }
+  // RIFF/WEBP and ISO BMFF (AVIF) -- need to peek the brand.
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) {
+    return 'webp';
+  }
+  // AVIF: ISO BMFF box: 4-byte length, then 'ftyp', then major brand.
+  // Brand 'avif' (still) or 'avis' (sequence).
+  if (
+    bytes.length >= 12 &&
+    bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70 &&
+    bytes[8] === 0x61 && bytes[9] === 0x76 && bytes[10] === 0x69 &&
+    (bytes[11] === 0x66 || bytes[11] === 0x73)
+  ) {
+    return 'avif';
+  }
+  // JPEG: FF D8 FF
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'jpeg';
+  }
+  return null;
+}
+
+/** Map a detected image format to its IANA media type. The server uses
+ *  THIS rather than whatever the client claimed in `file.type`. */
+export function contentTypeForFormat(format: ImageFormat): string {
+  switch (format) {
+    case 'jpeg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    case 'webp': return 'image/webp';
+    case 'gif': return 'image/gif';
+    case 'avif': return 'image/avif';
+  }
 }
 
 /** Read width/height from the first few bytes of a JPEG/PNG/WebP/GIF.

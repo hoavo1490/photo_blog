@@ -3,6 +3,12 @@ import { env } from 'cloudflare:workers';
 import { createGitHubOAuth } from '../../lib/auth/oauth';
 import { completeLogin } from '../../lib/auth/login-flow';
 import { buildSessionCookie } from '../../lib/auth/session-cookie';
+import {
+  safeNext,
+  parseStateNonce,
+  readOAuthStateCookie,
+  buildClearOAuthStateCookie,
+} from './callback-validators';
 
 export const GET: APIRoute = async (ctx) => {
   const driver = ctx.locals.db;
@@ -12,13 +18,26 @@ export const GET: APIRoute = async (ctx) => {
   const stateRaw = ctx.url.searchParams.get('state');
   if (!code || !stateRaw) return new Response('Missing code/state', { status: 400 });
 
-  let next = '/admin';
+  // CSRF defense: the server-issued nonce inside `state` must match a
+  // server-set cookie. Without this, an attacker can paste a forged
+  // ?code= into the victim's browser and log them into the attacker's
+  // GitHub account (login CSRF).
+  const stateNonce = parseStateNonce(stateRaw);
+  const cookieNonce = readOAuthStateCookie(ctx.request.headers.get('cookie'));
+  if (!stateNonce || !cookieNonce || stateNonce !== cookieNonce) {
+    return new Response('Invalid OAuth state', { status: 400 });
+  }
+
+  // Same-origin redirect target. Anything else (protocol-relative,
+  // absolute external, garbage) falls back to /admin.
+  let nextRaw: string | null = null;
   try {
-    const s = JSON.parse(atob(stateRaw)) as { next?: string };
-    if (s.next && s.next.startsWith('/')) next = s.next;
+    const s = JSON.parse(atob(stateRaw)) as { next?: unknown };
+    if (typeof s.next === 'string') nextRaw = s.next;
   } catch {
     // ignore
   }
+  const next = safeNext(nextRaw, ctx.url.origin);
 
   const e = env as unknown as {
     GITHUB_OAUTH_CLIENT_ID: string;
@@ -46,13 +65,17 @@ export const GET: APIRoute = async (ctx) => {
     return new Response(`Login failed: ${(err as Error).message}`, { status: 403 });
   }
 
-  const cookie = buildSessionCookie(result.sessionId, {
+  const secure = ctx.url.protocol === 'https:';
+  const sessionCookie = buildSessionCookie(result.sessionId, {
     domain: e.COOKIE_DOMAIN,
-    secure: ctx.url.protocol === 'https:',
+    secure,
   });
+  // Clear the one-shot OAuth state cookie now that we've verified it.
+  const clearStateCookie = buildClearOAuthStateCookie({ domain: e.COOKIE_DOMAIN, secure });
 
-  return new Response(null, {
-    status: 302,
-    headers: { location: next, 'set-cookie': cookie },
-  });
+  const headers = new Headers();
+  headers.set('location', next);
+  headers.append('set-cookie', sessionCookie);
+  headers.append('set-cookie', clearStateCookie);
+  return new Response(null, { status: 302, headers });
 };

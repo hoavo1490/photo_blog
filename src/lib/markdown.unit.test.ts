@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { marked } from 'marked';
 import {
   firstImageToken,
   firstImageUrl,
@@ -6,6 +7,7 @@ import {
   allImageTokens,
   rewriteImageTokens,
 } from './markdown';
+import { sanitizePostHtml } from './sanitize-html';
 
 const UUID_A = '11111111-2222-3333-4444-555555555555';
 const UUID_B = '66666666-7777-8888-9999-aaaaaaaaaaaa';
@@ -162,5 +164,72 @@ describe('rewriteImageTokens', () => {
   it('escapes alt text into HTML attributes', () => {
     const out = rewriteImageTokens(`![he said "hi" & <ok>](image:${UUID_A})`, resolver);
     expect(out).toContain('alt="he said &quot;hi&quot; &amp; &lt;ok>"');
+  });
+});
+
+describe('sanitizePostHtml', () => {
+  it('strips <script> tags from marked output', async () => {
+    const md = `# hi\n\n<script>alert(1)</script>\n\nbye`;
+    const rendered = await marked.parse(md);
+    const clean = sanitizePostHtml(rendered);
+    expect(clean).not.toContain('<script');
+    expect(clean).not.toContain('alert(1)');
+    expect(clean).toContain('<h1');
+    expect(clean).toContain('bye');
+  });
+
+  it('strips inline event handlers like onerror', () => {
+    const dirty = `<img src="x" onerror="alert(1)" />`;
+    const clean = sanitizePostHtml(dirty);
+    expect(clean).not.toContain('onerror');
+    expect(clean).not.toContain('alert');
+  });
+
+  it('strips javascript: hrefs', () => {
+    const dirty = `<a href="javascript:alert(1)">click</a>`;
+    const clean = sanitizePostHtml(dirty);
+    expect(clean).not.toContain('javascript:');
+  });
+
+  it('preserves the rewriter <picture><source><img> chain intact', () => {
+    const dirty =
+      '<picture>' +
+      '<source type="image/avif" srcset="https://cdn/a.400w.avif 400w" sizes="(max-width: 800px) 100vw, 750px" />' +
+      '<source type="image/webp" srcset="https://cdn/a.400w.webp 400w" sizes="(max-width: 800px) 100vw, 750px" />' +
+      '<img src="https://cdn/a.jpg" srcset="https://cdn/a.400w.jpg 400w" sizes="(max-width: 800px) 100vw, 750px" alt="pic" width="1600" height="1200" loading="lazy" decoding="async" fetchpriority="low" data-pswp-src="https://cdn/a.jpg" />' +
+      '</picture>';
+    const clean = sanitizePostHtml(dirty);
+    expect(clean).toContain('<picture>');
+    expect(clean).toContain('type="image/avif"');
+    expect(clean).toContain('type="image/webp"');
+    expect(clean).toContain('srcset="https://cdn/a.400w.jpg 400w"');
+    expect(clean).toContain('sizes="(max-width: 800px) 100vw, 750px"');
+    expect(clean).toContain('loading="lazy"');
+    expect(clean).toContain('decoding="async"');
+    expect(clean).toContain('fetchpriority="low"');
+    expect(clean).toContain('data-pswp-src="https://cdn/a.jpg"');
+    expect(clean).toContain('width="1600"');
+    expect(clean).toContain('height="1200"');
+  });
+
+  it('keeps standard markdown output (headings, lists, code, links)', async () => {
+    const md = `# Title\n\nSome **bold** text and a [link](https://example.com).\n\n- one\n- two\n\n\`code\`\n\n\`\`\`\nfenced\n\`\`\``;
+    const rendered = await marked.parse(md);
+    const clean = sanitizePostHtml(rendered);
+    expect(clean).toContain('<h1');
+    expect(clean).toContain('<strong>bold</strong>');
+    expect(clean).toContain('<a href="https://example.com"');
+    expect(clean).toContain('<ul>');
+    expect(clean).toContain('<li>one</li>');
+    expect(clean).toContain('<code>');
+    expect(clean).toContain('<pre>');
+  });
+
+  it('strips <iframe> and <style>', () => {
+    const dirty = `<iframe src="https://evil"></iframe><style>p{display:none}</style><p>ok</p>`;
+    const clean = sanitizePostHtml(dirty);
+    expect(clean).not.toContain('<iframe');
+    expect(clean).not.toContain('<style');
+    expect(clean).toContain('<p>ok</p>');
   });
 });
