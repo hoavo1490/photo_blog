@@ -163,4 +163,28 @@ describe('rewriteImageTokens', () => {
     const out = rewriteImageTokens(`![he said "hi" & <ok>](image:${UUID_A})`, resolver);
     expect(out).toContain('alt="he said &quot;hi&quot; &amp; &lt;ok>"');
   });
+
+  it('emits alt="" when resolver alt is a digit-only filename slug', () => {
+    // Phone-camera filenames like "1000045235" carry no semantic value;
+    // WCAG-correct treatment is empty alt (decorative).
+    const out = rewriteImageTokens(`![](image:${UUID_A})`, (id) =>
+      id === UUID_A ? { url: 'https://cdn/a.jpg', alt: '1000045235' } : null,
+    );
+    expect(out).toContain('alt=""');
+    expect(out).not.toContain('alt="1000045235"');
+  });
+
+  it('emits alt="" when resolver alt looks like an IMG_ filename', () => {
+    const out = rewriteImageTokens(`![](image:${UUID_A})`, (id) =>
+      id === UUID_A ? { url: 'https://cdn/a.jpg', alt: 'IMG_20240101_123456' } : null,
+    );
+    expect(out).toContain('alt=""');
+  });
+
+  it('keeps inline alt even if it is digit-only (user intent wins)', () => {
+    const out = rewriteImageTokens(`![2024](image:${UUID_A})`, (id) =>
+      id === UUID_A ? { url: 'https://cdn/a.jpg', alt: '1000045235' } : null,
+    );
+    expect(out).toContain('alt="2024"');
+  });
 });

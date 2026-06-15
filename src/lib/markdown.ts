@@ -151,6 +151,19 @@ function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
+/** Heuristic: does this alt text look like a meaningless camera/phone
+ *  filename (e.g. "1000045235", "IMG_20240101_123456", "DSC01234")?
+ *  Such "alt" comes from the upload's originalName and adds nothing for
+ *  screen readers -- WCAG calls for empty alt on decorative images. */
+function isFilenameSlugAlt(alt: string): boolean {
+  if (!alt) return false;
+  // Purely digits (any length).
+  if (/^\d+$/.test(alt)) return true;
+  // Common camera prefixes followed by digits/underscores/dashes.
+  if (/^(IMG|DSC|PXL|MVIMG|VID|PHOTO|P)[_-]?[\d_\-]+$/i.test(alt)) return true;
+  return false;
+}
+
 /** Replace `![alt](image:<uuid>)` tokens with a responsive <picture>
  *  block (when variants exist) or a plain markdown image (when they
  *  don't). The first resolved image is emitted with eager loading and
@@ -162,7 +175,14 @@ export function rewriteImageTokens(body: string, resolve: ImageResolver): string
   return body.replace(IMAGE_TOKEN_RE, (whole, alt: string, id: string) => {
     const resolved = resolve(id);
     if (!resolved) return whole;
-    const finalAlt = alt || resolved.alt || '';
+    // Inline alt (author intent) always wins. Otherwise fall back to the
+    // resolved alt -- but drop it if it looks like a phone-camera
+    // filename slug (no semantic value to screen readers).
+    let finalAlt = alt;
+    if (!finalAlt) {
+      const candidate = resolved.alt ?? '';
+      finalAlt = isFilenameSlugAlt(candidate) ? '' : candidate;
+    }
     const priority = resolvedCount === 0;
     resolvedCount++;
     return buildPictureHtml(resolved, finalAlt, priority);

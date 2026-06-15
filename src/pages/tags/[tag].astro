@@ -28,7 +28,7 @@ const posts = rows.map((r) => ({ slug: r.slug, title: r.title, publishedAt: new 
 ---
 <BaseLayout title={`#${tag.name}`} description={`Posts tagged ${tag.name} on riovv.`}>
   <article>
-    <section class="title"><h2>#{tag.name}</h2></section>
+    <section class="title"><h1>#{tag.name}</h1></section>
     <section class="post">
       <ul class="listing">
         {posts.map((p) => {

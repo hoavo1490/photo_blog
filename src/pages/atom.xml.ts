@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import * as posts from '../lib/db/posts';
+import { firstParagraph } from '../lib/markdown';
 import { postUrl } from '../lib/post-url';
 
 export const GET: APIRoute = async (ctx) => {
@@ -14,13 +15,17 @@ export const GET: APIRoute = async (ctx) => {
   const items = all
     .map((p) => {
       const url = `${siteUrl}${postUrl({ publishedAt: p.publishedAt!, slug: p.slug })}`;
+      // Recent uploads can land with NULL description in the DB; fall
+      // back to the post's first paragraph so feed readers always have
+      // a blurb -- matching what the home page cards already show.
+      const desc = p.description ?? firstParagraph(p.body) ?? undefined;
       return `
     <item>
       <title>${esc(p.title)}</title>
       <link>${url}</link>
       <guid isPermaLink="false">${p.id}</guid>
       <pubDate>${p.publishedAt!.toUTCString()}</pubDate>
-      ${p.description ? `<description>${esc(p.description)}</description>` : ''}
+      ${desc ? `<description>${esc(desc)}</description>` : ''}
     </item>`;
     })
     .join('');
