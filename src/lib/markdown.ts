@@ -110,10 +110,12 @@ function buildPictureHtml(resolved: ResolvedImage, alt: string, priority: boolea
   const widths = resolved.variantWidths ?? [];
   const base = resolved.variantUrlBase;
   // First in-body image is the LCP candidate: eager + high priority +
-  // sync decode. Everything below the fold gets lazy + async.
+  // sync decode. Everything else gets lazy + async + explicit LOW
+  // priority so Chrome's network scheduler won't let stacked lazy
+  // images steal bandwidth from the LCP fetch.
   const loading = priority ? 'eager' : 'lazy';
   const decoding = priority ? 'sync' : 'async';
-  const fetchAttr = priority ? ' fetchpriority="high"' : '';
+  const fetchAttr = priority ? ' fetchpriority="high"' : ' fetchpriority="low"';
 
   if (widths.length === 0 || !base) {
     const dim = resolved.width && resolved.height
