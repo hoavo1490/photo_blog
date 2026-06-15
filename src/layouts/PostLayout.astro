@@ -15,15 +15,19 @@ const driver = Astro.locals.db!;
 const tenant = Astro.locals.tenant!;
 const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
 
-// One batched SELECT covers both the body rewrite and the LCP preload.
-const bodyResolver = await buildBodyImageResolver(driver, post, env_);
+// Fire every independent DB read in parallel -- serial awaits were
+// stacking three RTTs to Neon (~50ms each) before render could begin.
+// All three queries only need the post + tenant we already have, so
+// nothing depends on the previous one's result.
+const [bodyResolver, cover, postTags] = await Promise.all([
+  buildBodyImageResolver(driver, post, env_),
+  coverUrlFor(driver, post, env_),
+  tagsRepo.listForPost(driver, { siteId: tenant.id, postId: post.id }),
+]);
 const rewritten = rewriteImageTokens(post.body, bodyResolver);
 const rendered = await marked.parse(rewritten);
 const firstBodyImg = firstBodyImageInfo(post.body, bodyResolver);
 const dateStr = post.publishedAt ? post.publishedAt.toISOString().slice(0, 10) : '';
-
-const cover = await coverUrlFor(driver, post, env_);
-const postTags = await tagsRepo.listForPost(driver, { siteId: tenant.id, postId: post.id });
 const tagNames = postTags.map((t) => t.name);
 const description = post.description ?? firstParagraph(post.body) ?? undefined;
 
