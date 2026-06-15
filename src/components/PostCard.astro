@@ -11,6 +11,11 @@ interface Props {
    *  fetchpriority=high so the LCP image starts loading immediately
    *  instead of waiting behind lazy-load heuristics. */
   priority?: boolean;
+  /** True for non-LCP cards that are nonetheless above the fold (cards
+   *  2-5 on most layouts). Eager-load them so they paint with the page
+   *  instead of "popping in" via Chrome's lazy heuristic, but leave
+   *  fetchpriority at auto so they yield bandwidth to the LCP fetch. */
+  aboveFold?: boolean;
   /** Variant widths available for this cover image, e.g. [400,800,1200].
    *  When empty the renderer falls back to a plain <img src>. */
   variantWidths?: number[];
@@ -22,7 +27,15 @@ interface Props {
   /** True when matching `.<W>w.avif` variants exist alongside JPEG/WebP. */
   hasAvif?: boolean;
 }
-const { post, cover, description, priority = false, variantWidths = [], r2Key, r2Env, hasAvif = false } = Astro.props;
+const { post, cover, description, priority = false, aboveFold = false, variantWidths = [], r2Key, r2Env, hasAvif = false } = Astro.props;
+
+// Three loading strategies:
+//   priority (LCP):     eager, sync decode, fetchpriority=high
+//   aboveFold (rank 1+): eager, async decode, fetchpriority=auto
+//   below the fold:     lazy,  async decode, fetchpriority=low
+const loadingAttr  = priority ? 'eager' : aboveFold ? 'eager' : 'lazy';
+const decodingAttr = priority ? 'sync'  : 'async';
+const fetchAttr   = priority ? 'high'  : aboveFold ? 'auto'  : 'low';
 
 // Sizes attribute matches the homepage grid:
 //   <= 480px : 1 column → 100vw
@@ -56,9 +69,9 @@ const avifSrcsetStr = avifSrcset.length > 0 ? avifSrcset.join(', ') : undefined;
         srcset={jpegSrcsetStr}
         sizes={jpegSrcsetStr ? sizesAttr : undefined}
         alt={post.title}
-        loading={priority ? 'eager' : 'lazy'}
-        decoding={priority ? 'sync' : 'async'}
-        fetchpriority={priority ? 'high' : 'auto'}
+        loading={loadingAttr}
+        decoding={decodingAttr}
+        fetchpriority={fetchAttr}
       />
     </picture>
   ) : (

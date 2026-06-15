@@ -84,18 +84,26 @@ const lcpAvifSrcset = latest && latest.r2Key && latest.hasAvif && latest.variant
             <div class="section-title">{year}</div>
           </div>
           <div class="section-images">
-            {list.map((c) => (
-              <PostCard
-                post={c.post}
-                cover={c.cover}
-                description={c.desc}
-                priority={cards[0]?.post.id === c.post.id}
-                variantWidths={c.variantWidths}
-                r2Key={c.r2Key ?? undefined}
-                r2Env={env_}
-                hasAvif={c.hasAvif}
-              />
-            ))}
+            {list.map((c) => {
+              const i = cards.findIndex((x) => x.post.id === c.post.id);
+              return (
+                <PostCard
+                  post={c.post}
+                  cover={c.cover}
+                  description={c.desc}
+                  // The newest card is the LCP candidate; cards 1-5 are
+                  // likely above the fold on mobile (1 col) and desktop
+                  // (2 rows of 3). Eager-load them so they paint with
+                  // the page instead of popping in via lazy heuristics.
+                  priority={i === 0}
+                  aboveFold={i > 0 && i < 6}
+                  variantWidths={c.variantWidths}
+                  r2Key={c.r2Key ?? undefined}
+                  r2Env={env_}
+                  hasAvif={c.hasAvif}
+                />
+              );
+            })}
           </div>
         </section>
       ))}
