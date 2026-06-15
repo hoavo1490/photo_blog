@@ -85,12 +85,17 @@ async function handleAdmin(
     // in ctx.waitUntil, so we hand the adapter's ExecutionContext into
     // loadSession when available. In tests / non-Worker callers the
     // ctx is absent and loadSession falls back to fire-and-forget.
-    const runtimeCtx = (context.locals as unknown as {
+    //
+    // Astro 6 renamed locals.runtime.ctx -> locals.cfContext on the
+    // Cloudflare adapter. Read the new location, fall back to the old
+    // one for back-compat in case we end up on an older adapter
+    // somehow (and to keep tests that mock `runtime.ctx` working).
+    const locals = context.locals as unknown as {
+      cfContext?: { waitUntil(p: Promise<unknown>): void };
       runtime?: { ctx?: { waitUntil(p: Promise<unknown>): void } };
-    }).runtime?.ctx;
-    const waitUntil = runtimeCtx
-      ? runtimeCtx.waitUntil.bind(runtimeCtx)
-      : undefined;
+    };
+    const cfCtx = locals.cfContext ?? locals.runtime?.ctx;
+    const waitUntil = cfCtx ? cfCtx.waitUntil.bind(cfCtx) : undefined;
     const session = await loadSession(context.locals.db!, sid, waitUntil);
     if (session) context.locals.session = session;
   }
