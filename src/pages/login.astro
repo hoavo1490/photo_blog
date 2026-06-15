@@ -2,8 +2,13 @@
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../layouts/AdminLayout.astro';
 import { createGitHubOAuth } from '../lib/auth/oauth';
+import { buildOAuthStateCookie } from './auth/callback-validators';
 
-const e = env as unknown as { GITHUB_OAUTH_CLIENT_ID?: string; GITHUB_OAUTH_CLIENT_SECRET?: string };
+const e = env as unknown as {
+  GITHUB_OAUTH_CLIENT_ID?: string;
+  GITHUB_OAUTH_CLIENT_SECRET?: string;
+  COOKIE_DOMAIN?: string;
+};
 const clientId = e.GITHUB_OAUTH_CLIENT_ID;
 const clientSecret = e.GITHUB_OAUTH_CLIENT_SECRET;
 
@@ -18,9 +23,21 @@ let target: string | null = null;
 if (missing.length === 0) {
   const oauth = createGitHubOAuth({ clientId: clientId!, clientSecret: clientSecret! });
   const next = Astro.url.searchParams.get('next') ?? '/admin';
-  const state = btoa(JSON.stringify({ next, n: crypto.randomUUID() }));
+  // The nonce is BOTH echoed into `state` AND stored in an HttpOnly
+  // cookie. /auth/callback requires the two to match -- this defeats
+  // login CSRF where an attacker pastes their own ?code= into the
+  // victim's browser.
+  const nonce = crypto.randomUUID();
+  const state = btoa(JSON.stringify({ next, n: nonce }));
   const callback = new URL('/auth/callback', Astro.url).toString();
   target = oauth.authorizeUrl(state, callback);
+  Astro.response.headers.append(
+    'set-cookie',
+    buildOAuthStateCookie(nonce, {
+      secure: Astro.url.protocol === 'https:',
+      domain: e.COOKIE_DOMAIN,
+    }),
+  );
 }
 ---
 <AdminLayout title="sign in">
