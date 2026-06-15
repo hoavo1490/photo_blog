@@ -4,14 +4,28 @@ import type { Post } from '../lib/db/posts';
 interface Props {
   mode: 'new' | 'edit';
   siteId: string;
-  initial: Partial<Post> & { tagNames?: string[]; coverUrl?: string | null };
+  initial: Partial<Post> & {
+    tagNames?: string[];
+    coverUrl?: string | null;
+    /** {uuid, url} for every image:<uuid> token in the body, resolved
+     *  server-side so the editor can render images inline. New uploads
+     *  during the session join this map client-side. */
+    bodyImages?: ReadonlyArray<{ id: string; url: string }>;
+  };
 }
 const { mode, siteId, initial } = Astro.props;
 const today = new Date().toISOString().slice(0, 10);
 const initialCoverId = initial.coverImageId ?? '';
 const initialCoverUrl = initial.coverUrl ?? '';
+const initialBodyImages = initial.bodyImages ?? [];
 ---
-<form id="post-form" data-mode={mode} data-site-id={siteId} data-post-id={initial.id ?? ''}>
+<form
+  id="post-form"
+  data-mode={mode}
+  data-site-id={siteId}
+  data-post-id={initial.id ?? ''}
+  data-body-images={JSON.stringify(initialBodyImages)}
+>
   <label style="display: block; margin-bottom: 14px;">
     <div class="field-label">title</div>
     <input name="title" required value={initial.title ?? ''} placeholder="post title" />
@@ -196,6 +210,12 @@ const initialCoverUrl = initial.coverUrl ?? '';
 
 <script>
   import type { BodyEditor } from '../scripts/body-editor';
+  import {
+    buildImageMapping,
+    expandImageTokens,
+    collapseImageTokens,
+    rememberImage,
+  } from '../scripts/image-tokens';
 
   const form = document.getElementById('post-form') as HTMLFormElement;
   const picker = document.getElementById('image-picker') as HTMLInputElement;
@@ -219,13 +239,23 @@ const initialCoverUrl = initial.coverUrl ?? '';
   // The textarea stays in the form so FormData still works; the editor
   // mirrors its content there on every change. While Milkdown loads
   // (async), the form is functional via the textarea alone.
+  //
+  // Body image flow: the SERVER ships a {uuid, url} list for every
+  // image:<uuid> token in the current body. Before mounting the editor
+  // we expand tokens to URLs so Crepe renders <img> inline. On every
+  // change we collapse URLs back to tokens before mirroring into the
+  // hidden textarea, keeping the save payload portable.
   let editor: BodyEditor | null = null;
-  const initialBody = body.value;
+  const initialBodyRaw = body.value; // tokens
+  const bodyImagesRaw = JSON.parse(form.dataset.bodyImages || '[]') as Array<{ id: string; url: string }>;
+  const imageMap = buildImageMapping(bodyImagesRaw);
+  const initialBodyExpanded = expandImageTokens(initialBodyRaw, imageMap);
   (async () => {
     try {
       const { mountMilkdownEditor } = await import('../scripts/body-editor-milkdown');
-      editor = await mountMilkdownEditor(editorMount, initialBody, (md) => {
-        body.value = md;
+      editor = await mountMilkdownEditor(editorMount, initialBodyExpanded, (md) => {
+        // Mirror back to the textarea in storage form (tokens).
+        body.value = collapseImageTokens(md, imageMap);
       });
     } catch (err) {
       // Milkdown failed to load. Reveal the textarea so the user can
@@ -234,13 +264,17 @@ const initialCoverUrl = initial.coverUrl ?? '';
       body.hidden = false;
       editorMount.style.display = 'none';
       const { mountTextareaEditor } = await import('../scripts/body-editor');
-      editor = mountTextareaEditor(body, initialBody);
+      editor = mountTextareaEditor(body, initialBodyRaw); // tokens stay as-is in textarea fallback
     }
   })();
 
-  // Pulls the current markdown -- prefers the live editor, falls back
-  // to the textarea when the editor isn't mounted yet.
-  const currentBody = () => editor?.getMarkdown() ?? body.value;
+  // Pulls the current markdown in STORAGE form (tokens, not URLs).
+  const currentBody = () => {
+    if (editor) {
+      return collapseImageTokens(editor.getMarkdown(), imageMap);
+    }
+    return body.value;
+  };
 
   const siteId = form.dataset.siteId!;
   const postId = form.dataset.postId || null;
@@ -312,17 +346,22 @@ const initialCoverUrl = initial.coverUrl ?? '';
       status.textContent = `uploading ${file.name}…`;
       const r = await compressAndUpload(file);
       if (!r) { status.textContent = `upload failed: ${file.name}`; continue; }
+      // Register the new image in the bidirectional map so the next
+      // editor change still collapses to a token on save.
+      rememberImage(imageMap, { id: r.id, url: r.url });
       // Insert with empty alt -- the auto-filename is meaningless to
       // screen readers and the renderer strips slug-shaped alts anyway.
       // Authors can type caption text into the brackets after insertion.
-      const token = `\n![](image:${r.id})\n`;
+      // We insert the resolved URL (not the token) so the editor renders
+      // the image immediately. On save, collapseImageTokens turns it
+      // back into image:<uuid>.
+      const insertion = `\n![](${r.url})\n`;
       if (editor) {
-        editor.insertAtCursor(token);
-        // Keep the hidden textarea in sync so FormData stays current.
-        body.value = editor.getMarkdown();
+        editor.insertAtCursor(insertion);
+        body.value = collapseImageTokens(editor.getMarkdown(), imageMap);
       } else {
-        // Editor not mounted yet; append directly to the textarea.
-        body.value += token;
+        // Editor not mounted yet; write the token form to the textarea.
+        body.value += `\n![](image:${r.id})\n`;
       }
       status.textContent = `inserted ${file.name}`;
     }
