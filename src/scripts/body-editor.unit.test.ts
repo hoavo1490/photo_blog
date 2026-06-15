@@ -64,11 +64,25 @@ describe('BodyEditor (textarea impl)', () => {
     expect(() => { ed.destroy(); ed.destroy(); }).not.toThrow();
   });
 
-  it('insertImageBlock() appends markdown image syntax', () => {
+  it('insertImageBlock() appends markdown image syntax with a trailing blank line', () => {
+    // The trailing blank line ensures the resulting markdown round-trips
+    // through the Milkdown impl with an empty paragraph after the image
+    // -- the place the user expects their cursor to land.
     const ed = mountTextareaEditor(ta, 'before');
     ta.selectionStart = ta.selectionEnd = ta.value.length;
     ed.insertImageBlock('/img/photo.800w.jpg');
-    expect(ed.getMarkdown()).toBe('before\n![](/img/photo.800w.jpg)\n');
+    expect(ed.getMarkdown()).toBe('before\n![](/img/photo.800w.jpg)\n\n');
+  });
+
+  it('insertImageBlock() puts the cursor on the blank line below the image', () => {
+    const ed = mountTextareaEditor(ta, 'a');
+    ta.selectionStart = ta.selectionEnd = 1;
+    ed.insertImageBlock('/img/x.jpg');
+    expect(ta.value).toBe('a\n![](/img/x.jpg)\n\n');
+    // Cursor should be at the very end -- positioned on the blank line
+    // where the user can immediately keep typing.
+    expect(ta.selectionStart).toBe(ta.value.length);
+    expect(ta.selectionEnd).toBe(ta.value.length);
   });
 
   it('insertImageBlock() respects the alt text argument', () => {

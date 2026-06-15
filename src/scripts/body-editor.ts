@@ -42,7 +42,11 @@ export function mountTextareaEditor(textarea: HTMLTextAreaElement, initial: stri
     },
     insertImageBlock: (url: string, alt = '') => {
       const at = textarea.selectionStart ?? textarea.value.length;
-      const md = `\n![${alt}](${url})\n`;
+      // Two trailing newlines leave a blank line below the image so the
+      // user lands on an empty paragraph and can keep typing right away
+      // -- mirroring the empty-block affordance the Milkdown impl
+      // maintains after an image-block insert.
+      const md = `\n![${alt}](${url})\n\n`;
       textarea.value = textarea.value.slice(0, at) + md + textarea.value.slice(at);
       textarea.selectionStart = textarea.selectionEnd = at + md.length;
     },

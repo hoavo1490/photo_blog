@@ -16,6 +16,24 @@ import '@milkdown/crepe/theme/frame.css';
 import type { BodyEditor } from './body-editor';
 import { createCrepeUploadHandler, type UploadResult } from './crepe-upload';
 
+/** Walks the doc; if the last top-level block isn't an empty paragraph,
+ *  appends one. Used after mount and after image insertion so the user
+ *  always has a place to keep typing below the last block. */
+function ensureTrailingEmptyParagraph(crepe: Crepe): void {
+  crepe.editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    const { state } = view;
+    const paragraphType = state.schema.nodes.paragraph;
+    if (!paragraphType) return;
+    const last = state.doc.lastChild;
+    const hasTrailing =
+      last?.type.name === 'paragraph' && last.content.size === 0;
+    if (hasTrailing) return;
+    const tr = state.tr.insert(state.doc.content.size, paragraphType.create());
+    view.dispatch(tr);
+  });
+}
+
 export interface MountMilkdownOptions {
   /** Compress + upload a File to our R2 backend. Called by Crepe when
    *  the user picks "Image" from the slash menu, drops an image into
@@ -51,6 +69,13 @@ export async function mountMilkdownEditor(
     featureConfigs,
   });
   await crepe.create();
+
+  // Guarantee the doc ends with an empty paragraph so there's always a
+  // landing place below the last block (especially after an image-block,
+  // which is a leaf node -- without a trailing paragraph the user can't
+  // easily click below it to keep typing). Idempotent: a no-op if the
+  // last node is already an empty paragraph.
+  ensureTrailingEmptyParagraph(crepe);
 
   if (onChange) {
     crepe.on((listener) => {
@@ -90,16 +115,35 @@ export async function mountMilkdownEditor(
       // Insert a real image-block ProseMirror node so Crepe renders it
       // immediately as an inline image -- not as raw markdown text
       // that the user would then have to nudge through an input rule.
+      // After insertion, ensure an empty paragraph follows the image
+      // and the cursor lands inside it -- otherwise the user has no
+      // obvious place to keep typing when the image is the last block.
       crepe.editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
-        const schema: Schema = view.state.schema;
+        const { state } = view;
+        const schema: Schema = state.schema;
         // Crepe's image-block component registers a node named
         // `image-block`. Fall back to the plain `image` node if that's
         // not in the schema (e.g. if someone disabled the feature).
         const imageBlockType = schema.nodes['image-block'] ?? schema.nodes.image;
         if (!imageBlockType) return;
-        const node = imageBlockType.create({ src: url, alt });
-        const tr = view.state.tr.replaceSelectionWith(node);
+        const paragraphType = schema.nodes.paragraph;
+        const imageNode = imageBlockType.create({ src: url, alt });
+        let tr = state.tr.replaceSelectionWith(imageNode);
+        if (paragraphType) {
+          // After replaceSelectionWith on a block node, tr.selection
+          // points just after the inserted node. If the next node isn't
+          // already an empty paragraph, insert one and move the cursor
+          // into it.
+          const afterImg = tr.selection.to;
+          const next = tr.doc.resolve(afterImg).nodeAfter;
+          const hasEmptyParaAfter =
+            next?.type.name === 'paragraph' && next.content.size === 0;
+          if (!hasEmptyParaAfter) {
+            tr = tr.insert(afterImg, paragraphType.create());
+          }
+          tr = tr.setSelection(TextSelection.create(tr.doc, afterImg + 1));
+        }
         view.dispatch(tr);
         view.focus();
       });
