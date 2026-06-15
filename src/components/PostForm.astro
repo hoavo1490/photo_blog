@@ -51,22 +51,25 @@ const tagsChipText = formatTagsChip(initialTagNames);
     </button>
   </header>
 
-  {/* ─── status chip row: date · tags · cover ──────────────────────── */}
+  {/* ─── status row: date · tags · cover · more ────────────────────── */}
   <div class="status-row">
     <button type="button" class="chip" data-sheet="date" id="chip-date">
-      <span class="chip-icon">📅</span><span class="chip-text">{dateChipText}</span>
+      <span class="chip-text">{dateChipText}</span>
     </button>
+    <span class="chip-sep" aria-hidden="true">·</span>
     <button type="button" class="chip" data-sheet="tags" id="chip-tags">
       <span class="chip-text">{tagsChipText}</span>
     </button>
+    <span class="chip-sep" aria-hidden="true">·</span>
     <button type="button" class="chip chip-cover" data-sheet="cover" id="chip-cover" data-has-cover={initialCoverUrl ? 'true' : 'false'}>
-      {initialCoverUrl
-        ? <img class="chip-thumb" src={initialCoverUrl} alt="cover" id="chip-cover-thumb" />
-        : <span class="chip-icon" id="chip-cover-icon">🖼</span>}
+      {initialCoverUrl && (
+        <img class="chip-thumb" src={initialCoverUrl} alt="" id="chip-cover-thumb" />
+      )}
       <span class="chip-text" id="chip-cover-text">{initialCoverUrl ? 'cover' : '+ cover'}</span>
     </button>
-    <button type="button" class="chip" data-sheet="more" id="chip-more" title="more">
-      <span class="chip-text">⋯</span>
+    <span class="chip-sep" aria-hidden="true">·</span>
+    <button type="button" class="chip chip-more" data-sheet="more" id="chip-more">
+      <span class="chip-text">more</span>
     </button>
   </div>
 
@@ -177,25 +180,34 @@ const tagsChipText = formatTagsChip(initialTagNames);
   }
 
   .status-row {
-    display: flex; gap: 6px; flex-wrap: wrap;
-    padding: 8px 12px;
+    display: flex; gap: 0; flex-wrap: wrap; align-items: center;
+    padding: 4px 16px 8px;
     background: var(--bg-elev);
     border-bottom: 1px solid var(--border);
+    font-size: 13px;
   }
   .chip {
     display: inline-flex; align-items: center; gap: 6px;
-    min-height: 30px; padding: 4px 10px;
-    border: 1px solid var(--border); border-radius: 999px;
-    background: var(--bg);
-    color: var(--fg); font-size: 13px; line-height: 1;
+    min-height: 28px; padding: 4px 8px;
+    border: none; background: transparent;
+    color: var(--muted); font-size: 13px; line-height: 1.2;
+    border-radius: 6px;
     cursor: pointer;
   }
-  .chip[aria-pressed="true"] { background: #f0f0f0; border-color: #888; }
-  .chip-icon { font-size: 14px; line-height: 1; }
-  .chip-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
-  .chip-cover { padding: 2px 10px 2px 2px; }
+  .chip:hover { color: var(--fg); background: rgba(0, 0, 0, 0.04); }
+  .chip[aria-pressed="true"] { color: var(--fg); background: rgba(0, 0, 0, 0.06); }
+  .chip-text {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 240px;
+  }
+  .chip-sep {
+    color: var(--muted); opacity: 0.4;
+    padding: 0 2px;
+    user-select: none;
+    font-size: 13px;
+  }
   .chip-thumb {
-    width: 24px; height: 24px; border-radius: 999px; object-fit: cover;
+    width: 18px; height: 18px; border-radius: 3px; object-fit: cover;
     display: block;
   }
 
@@ -474,15 +486,27 @@ const tagsChipText = formatTagsChip(initialTagNames);
   });
 
   // ─── chip ⇄ hidden input wiring ─────────────────────────────────────
-  datePicker.addEventListener('change', () => {
-    dateInput.value = datePicker.value;
-    chipDate.querySelector('.chip-text')!.textContent = formatDateChip(datePicker.value || null, today);
-  });
-  tagsEditor.addEventListener('input', () => {
+  // Mobile date pickers (especially iOS) sometimes fire `input` instead
+  // of `change`, and vice versa on desktop. Listen to both so the chip
+  // text and the hidden form input stay in sync no matter how the user
+  // picks the date.
+  const updateDateChip = () => {
+    const v = datePicker.value;
+    dateInput.value = v;
+    chipDate.querySelector('.chip-text')!.textContent = formatDateChip(v || null, today);
+  };
+  datePicker.addEventListener('change', updateDateChip);
+  datePicker.addEventListener('input', updateDateChip);
+
+  const updateTagsChip = () => {
     tagsInput.value = tagsEditor.value;
     chipTags.querySelector('.chip-text')!.textContent = formatTagsChip(tagsEditor.value);
-  });
+  };
+  tagsEditor.addEventListener('input', updateTagsChip);
+  tagsEditor.addEventListener('change', updateTagsChip);
+
   slugEditor.addEventListener('input', () => { slugInput.value = slugEditor.value; });
+  slugEditor.addEventListener('change', () => { slugInput.value = slugEditor.value; });
 
   // ─── image compression + upload (unchanged from prior version) ──────
   const VARIANT_TARGETS = [400, 800, 1200, 1600];
@@ -533,8 +557,6 @@ const tagsChipText = formatTagsChip(initialTagNames);
     // Refresh the chip: thumbnail + "cover" label.
     chipCover.dataset.hasCover = 'true';
     chipCoverText.textContent = 'cover';
-    const existingIcon = document.getElementById('chip-cover-icon');
-    if (existingIcon) existingIcon.remove();
     const existingThumb = document.getElementById('chip-cover-thumb');
     if (existingThumb) {
       (existingThumb as HTMLImageElement).src = url;
@@ -542,7 +564,7 @@ const tagsChipText = formatTagsChip(initialTagNames);
       const img = document.createElement('img');
       img.id = 'chip-cover-thumb';
       img.className = 'chip-thumb';
-      img.src = url; img.alt = 'cover';
+      img.src = url; img.alt = '';
       chipCover.insertBefore(img, chipCoverText);
     }
   }
@@ -555,13 +577,6 @@ const tagsChipText = formatTagsChip(initialTagNames);
     chipCoverText.textContent = '+ cover';
     const existingThumb = document.getElementById('chip-cover-thumb');
     if (existingThumb) existingThumb.remove();
-    if (!document.getElementById('chip-cover-icon')) {
-      const span = document.createElement('span');
-      span.id = 'chip-cover-icon';
-      span.className = 'chip-icon';
-      span.textContent = '🖼';
-      chipCover.insertBefore(span, chipCoverText);
-    }
   }
   coverPicker.addEventListener('change', async () => {
     const f = coverPicker.files?.[0];
