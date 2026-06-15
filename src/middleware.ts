@@ -80,7 +80,18 @@ async function handleAdmin(
 
   const sid = readSessionId(context.request.headers);
   if (sid && looksLikeSessionId(sid)) {
-    const session = await loadSession(context.locals.db!, sid);
+    // The session touch (refresh last_used_at) is fire-and-forget. On
+    // Cloudflare Workers post-response work is terminated unless wrapped
+    // in ctx.waitUntil, so we hand the adapter's ExecutionContext into
+    // loadSession when available. In tests / non-Worker callers the
+    // ctx is absent and loadSession falls back to fire-and-forget.
+    const runtimeCtx = (context.locals as unknown as {
+      runtime?: { ctx?: { waitUntil(p: Promise<unknown>): void } };
+    }).runtime?.ctx;
+    const waitUntil = runtimeCtx
+      ? runtimeCtx.waitUntil.bind(runtimeCtx)
+      : undefined;
+    const session = await loadSession(context.locals.db!, sid, waitUntil);
     if (session) context.locals.session = session;
   }
 

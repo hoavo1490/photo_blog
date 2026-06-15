@@ -64,11 +64,21 @@ export async function completeLogin(
   };
 }
 
+/** Function compatible with `ExecutionContext.waitUntil`. */
+export type WaitUntil = (promise: Promise<unknown>) => void;
+
 /** Look up the active session and the user it belongs to.
- *  Returns null if cookie missing, malformed, expired, or revoked. */
+ *  Returns null if cookie missing, malformed, expired, or revoked.
+ *
+ *  Pass the request's `ctx.waitUntil` so the deferred touch of
+ *  last_used_at survives response return on Cloudflare Workers --
+ *  without it, the Worker isolate may terminate before the UPDATE
+ *  finishes and last_used_at becomes unreliable. Tests / Node callers
+ *  may omit the argument; we fall back to the old fire-and-forget. */
 export async function loadSession(
   driver: SqlDriver,
   sessionId: string,
+  waitUntil?: WaitUntil,
 ): Promise<{ sessionId: string; userId: string; githubLogin: string } | null> {
   const session = await sessions.findActive(driver, sessionId);
   if (!session) return null;
@@ -76,10 +86,15 @@ export async function loadSession(
   const user = await users.findById(driver, session.userId);
   if (!user) return null;
 
-  // Fire-and-forget: refreshing last_used_at is best-effort and must
-  // not block the response. We swallow errors deliberately -- a touch
-  // failure does not invalidate the session.
-  void sessions.touch(driver, sessionId).catch(() => {});
+  // Refreshing last_used_at is best-effort and must not block the
+  // response. We swallow errors deliberately -- a touch failure does not
+  // invalidate the session.
+  const touch = sessions.touch(driver, sessionId).catch(() => {});
+  if (waitUntil) {
+    waitUntil(touch);
+  } else {
+    void touch;
+  }
 
   return {
     sessionId: session.id,
