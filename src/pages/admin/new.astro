@@ -15,6 +15,6 @@ const sites = await driver.query<{ id: string }>(
 if (sites.length === 0) return new Response('No sites', { status: 403 });
 const siteId = sites[0].id;
 ---
-<AdminLayout title="new post">
+<AdminLayout title="new post" bare>
   <PostForm mode="new" siteId={siteId} initial={{ tagNames: [] }} />
 </AdminLayout>

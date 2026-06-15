@@ -1,5 +1,6 @@
 ---
 import type { Post } from '../lib/db/posts';
+import { formatDateChip, formatTagsChip } from '../scripts/post-meta-chips';
 
 interface Props {
   mode: 'new' | 'edit';
@@ -18,39 +19,78 @@ const today = new Date().toISOString().slice(0, 10);
 const initialCoverId = initial.coverImageId ?? '';
 const initialCoverUrl = initial.coverUrl ?? '';
 const initialBodyImages = initial.bodyImages ?? [];
+const initialDate = initial.publishedAt
+  ? initial.publishedAt.toISOString().slice(0, 10)
+  : today;
+const initialTagNames = initial.tagNames ?? [];
+const initialTagsCsv = initialTagNames.join(', ');
+const dateChipText = formatDateChip(initialDate, today);
+const tagsChipText = formatTagsChip(initialTagNames);
 ---
 <form
   id="post-form"
   data-mode={mode}
   data-site-id={siteId}
   data-post-id={initial.id ?? ''}
+  data-today={today}
   data-body-images={JSON.stringify(initialBodyImages)}
 >
-  <label style="display: block; margin-bottom: 14px;">
-    <div class="field-label">title</div>
-    <input name="title" required value={initial.title ?? ''} placeholder="post title" />
-  </label>
+  {/* ─── editor header: close · title · publish ─────────────────────── */}
+  <header class="editor-header">
+    <button type="button" class="icon-btn close-btn" onclick="history.back()" aria-label="close">✕</button>
+    <input
+      name="title"
+      class="title-input"
+      required
+      value={initial.title ?? ''}
+      placeholder="Title…"
+      autocomplete="off"
+    />
+    <button type="submit" class="primary publish-btn" id="save-btn">
+      {mode === 'edit' ? 'Save' : 'Publish'}
+    </button>
+  </header>
 
-  <label style="display: block; margin-bottom: 14px;">
-    <div class="field-label">slug</div>
-    <input name="slug" value={initial.slug ?? ''} placeholder="auto from title" />
-  </label>
+  {/* ─── status chip row: date · tags · cover ──────────────────────── */}
+  <div class="status-row">
+    <button type="button" class="chip" data-sheet="date" id="chip-date">
+      <span class="chip-icon">📅</span><span class="chip-text">{dateChipText}</span>
+    </button>
+    <button type="button" class="chip" data-sheet="tags" id="chip-tags">
+      <span class="chip-text">{tagsChipText}</span>
+    </button>
+    <button type="button" class="chip chip-cover" data-sheet="cover" id="chip-cover" data-has-cover={initialCoverUrl ? 'true' : 'false'}>
+      {initialCoverUrl
+        ? <img class="chip-thumb" src={initialCoverUrl} alt="cover" id="chip-cover-thumb" />
+        : <span class="chip-icon" id="chip-cover-icon">🖼</span>}
+      <span class="chip-text" id="chip-cover-text">{initialCoverUrl ? 'cover' : '+ cover'}</span>
+    </button>
+  </div>
 
-  <label style="display: block; margin-bottom: 14px;">
-    <div class="field-label">date</div>
-    <input name="date" type="date"
-      value={initial.publishedAt ? initial.publishedAt.toISOString().slice(0, 10) : today} />
-  </label>
+  {/* Hidden inputs for the values the chips display. The form serializes
+      these into the save payload via FormData. */}
+  <input type="hidden" name="date" id="date-input" value={initialDate} />
+  <input type="hidden" name="tags" id="tags-input" value={initialTagsCsv} />
+  <input type="hidden" name="slug" id="slug-input" value={initial.slug ?? ''} />
+  <input type="hidden" name="coverImageId" id="cover-image-id" value={initialCoverId} />
 
-  <label style="display: block; margin-bottom: 14px;">
-    <div class="field-label">tags (comma-separated)</div>
-    <input name="tags" value={(initial.tagNames ?? []).join(', ')} placeholder="photography, leica" />
-  </label>
+  {/* ─── inline sheets: one shows at a time, below the status row ─── */}
+  <div class="meta-sheet" id="sheet-date" hidden>
+    <label class="sheet-row">
+      <span class="sheet-label">date</span>
+      <input type="date" id="date-picker" value={initialDate} />
+    </label>
+  </div>
 
-  <div style="margin-bottom: 18px;">
-    <div class="field-label">cover photo</div>
-    <input id="cover-image-id" name="coverImageId" type="hidden" value={initialCoverId} />
-    <div id="cover-row" data-has-cover={initialCoverUrl ? 'true' : 'false'}>
+  <div class="meta-sheet" id="sheet-tags" hidden>
+    <label class="sheet-row">
+      <span class="sheet-label">tags (comma-separated)</span>
+      <input type="text" id="tags-editor" value={initialTagsCsv} placeholder="photography, leica" />
+    </label>
+  </div>
+
+  <div class="meta-sheet" id="sheet-cover" hidden>
+    <div class="sheet-row sheet-row-cover">
       <div id="cover-thumb-wrap" style={initialCoverUrl ? '' : 'display:none;'}>
         <img id="cover-thumb" src={initialCoverUrl} alt="cover" />
         <button type="button" id="cover-remove" class="cover-remove-btn" aria-label="remove cover">×</button>
@@ -59,56 +99,123 @@ const initialBodyImages = initial.bodyImages ?? [];
         <span id="cover-upload-text">{initialCoverUrl ? 'replace' : '+ choose cover'}</span>
         <input id="cover-picker" type="file" accept="image/*" style="display:none;" />
       </label>
-    </div>
-    <div id="cover-status" class="upload-status"></div>
-  </div>
-
-  <div style="margin-bottom: 14px;">
-    <div class="field-label">body</div>
-
-    <div class="tabs">
-      <button type="button" class="tab active" data-tab="write">write</button>
-      <button type="button" class="tab" data-tab="preview">preview</button>
-    </div>
-
-    {/* Milkdown's slash menu, drag/drop, and clipboard paste handle
-        image uploads. Formatting (bold / italic / headings / quotes /
-        lists / links) comes from its inline toolbar. No custom toolbar
-        bar of our own -- the editor surface is the toolbar. */}
-
-    {/* Milkdown mounts onto this div. The textarea below stays in the
-        form for back-compat with FormData and as a no-JS fallback;
-        the editor mirrors its content into the textarea on every
-        change. */}
-    <div id="milkdown-editor" class="milkdown-host"></div>
-    <textarea id="body-area" name="body" rows="14"
-      placeholder="write here…" hidden>{initial.body ?? ''}</textarea>
-
-    <div id="preview-area" class="preview-area" style="display:none;">
-      <div class="preview-placeholder">nothing to preview yet…</div>
+      <span class="upload-status" id="cover-status"></span>
     </div>
   </div>
 
-  <div class="save-bar">
-    <div>
-      {mode === 'edit' && <button type="button" class="danger" id="delete-btn">delete</button>}
-    </div>
-    <div class="right">
-      <button type="button" onclick="history.back()">cancel</button>
-      <button type="submit" class="primary" id="save-btn">save</button>
-    </div>
+  <div class="meta-sheet" id="sheet-more" hidden>
+    <label class="sheet-row">
+      <span class="sheet-label">slug (auto from title if blank)</span>
+      <input type="text" id="slug-editor" value={initial.slug ?? ''} placeholder="leica-summicron-50mm" />
+    </label>
+    {mode === 'edit' && (
+      <div class="sheet-row">
+        <button type="button" class="danger" id="delete-btn">delete this post</button>
+      </div>
+    )}
+  </div>
+
+  {/* ─── body editor: Milkdown mounts here, textarea is the fallback ─ */}
+  <div id="milkdown-editor" class="milkdown-host"></div>
+  <textarea id="body-area" name="body" rows="14" placeholder="write here…" hidden>{initial.body ?? ''}</textarea>
+
+  <div id="preview-area" class="preview-area" hidden>
+    <div class="preview-placeholder">nothing to preview yet…</div>
+  </div>
+
+  {/* ─── sticky bottom toolbar ─────────────────────────────────────── */}
+  <div class="bottom-toolbar" id="bottom-toolbar">
+    <button type="button" class="tb" data-cmd="bold" title="bold"><strong>B</strong></button>
+    <button type="button" class="tb" data-cmd="italic" title="italic"><em>I</em></button>
+    <button type="button" class="tb" data-cmd="blockquote" title="quote">❝</button>
+    <button type="button" class="tb" data-cmd="list" title="list">•</button>
+    <button type="button" class="tb" data-cmd="link" title="link">🔗</button>
+    <label class="tb tb-image" title="image">
+      <span>🖼</span>
+      <input id="image-picker" type="file" accept="image/*" multiple style="display:none;" />
+    </label>
+    <span class="tb-spacer"></span>
+    <button type="button" class="tb" data-cmd="preview" id="preview-toggle" title="preview" aria-pressed="false">👁</button>
+    <button type="button" class="tb" data-sheet="more" title="more">⚙</button>
   </div>
 </form>
 
 <style>
-  .field-label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  .upload-status { font-size: 13px; color: var(--muted); margin: 4px 0 0; min-height: 1.4em; }
-
-  #cover-row {
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  /* Form is a flex column so the bottom toolbar can dock at the bottom
+     of the viewport while the body editor grows to fill the middle. */
+  #post-form {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
   }
+
+  .editor-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: calc(var(--safe-top) + 8px) 12px 8px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .icon-btn {
+    min-height: 36px; min-width: 36px; padding: 0;
+    border: none; background: transparent; font-size: 18px;
+    color: var(--muted); border-radius: 8px;
+  }
+  .icon-btn:hover { background: rgba(0, 0, 0, 0.04); color: var(--fg); }
+  .title-input {
+    flex: 1; min-width: 0;
+    padding: 8px 10px; font-size: 18px; font-weight: 600;
+    border: none; background: transparent; border-radius: 8px;
+  }
+  .title-input::placeholder { color: var(--muted); font-weight: 400; }
+  .title-input:focus { outline: 2px solid #111; outline-offset: -1px; background: var(--bg); }
+  .publish-btn {
+    min-height: 36px; padding: 6px 16px; font-size: 14px; font-weight: 600;
+    border-radius: 999px;
+  }
+
+  .status-row {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    padding: 8px 12px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 30px; padding: 4px 10px;
+    border: 1px solid var(--border); border-radius: 999px;
+    background: var(--bg);
+    color: var(--fg); font-size: 13px; line-height: 1;
+    cursor: pointer;
+  }
+  .chip[aria-pressed="true"] { background: #f0f0f0; border-color: #888; }
+  .chip-icon { font-size: 14px; line-height: 1; }
+  .chip-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+  .chip-cover { padding: 2px 10px 2px 2px; }
+  .chip-thumb {
+    width: 24px; height: 24px; border-radius: 999px; object-fit: cover;
+    display: block;
+  }
+
+  .meta-sheet {
+    padding: 10px 12px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+  }
+  .sheet-row {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin: 0;
+  }
+  .sheet-row + .sheet-row { margin-top: 10px; }
+  .sheet-label { font-size: 12px; color: var(--muted); min-width: 90px; }
+  .sheet-row input[type="text"], .sheet-row input[type="date"] {
+    flex: 1; min-width: 160px;
+  }
+  .sheet-row-cover { align-items: center; }
+  .upload-status { font-size: 12px; color: var(--muted); }
+
   #cover-thumb-wrap {
-    position: relative; width: 88px; height: 88px;
+    position: relative; width: 72px; height: 72px;
     border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
     background: var(--bg-elev);
   }
@@ -121,60 +228,56 @@ const initialBodyImages = initial.bodyImages ?? [];
     font-size: 16px; cursor: pointer;
   }
   .cover-upload-btn {
-    display: inline-flex; align-items: center; padding: 10px 14px;
+    display: inline-flex; align-items: center; padding: 8px 14px;
     border: 1px dashed var(--border); border-radius: 8px;
-    background: var(--bg-elev); cursor: pointer; font-size: 14px;
+    background: var(--bg); cursor: pointer; font-size: 14px;
     color: var(--muted);
   }
 
-  .tabs { display: flex; gap: 0; margin-bottom: 6px; }
-  .tab {
-    flex: 0 0 auto; min-height: 36px; padding: 6px 14px;
-    border: 1px solid var(--border); background: transparent;
-    border-radius: 0; font-size: 14px;
-  }
-  .tab:first-child { border-radius: 8px 0 0 8px; }
-  .tab:last-child  { border-radius: 0 8px 8px 0; border-left: none; }
-  .tab.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
-
+  /* ─── editor surface ─────────────────────────────────────────────── */
   .milkdown-host {
-    min-height: 360px;
+    flex: 1;
     background: var(--bg-elev);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  /* Milkdown's default editor area: trim the chrome so it fits in our
-     form aesthetic. */
-  .milkdown-host milkdown-editor,
-  .milkdown-host .milkdown {
-    background: var(--bg-elev);
+    overflow-y: auto;
   }
   .milkdown-host .ProseMirror {
-    padding: 14px 16px;
-    min-height: 340px;
+    max-width: 720px; margin: 0 auto;
+    padding: 20px 16px 80px;
+    min-height: 100%;
     outline: none;
-    font-size: 16px;
-    line-height: 1.6;
+    font-size: 17px;
+    line-height: 1.65;
   }
   .milkdown-host .ProseMirror p { margin: 8px 0; }
-  .milkdown-host .ProseMirror h1 { font-size: 22px; margin: 16px 0 8px; }
-  .milkdown-host .ProseMirror h2 { font-size: 20px; margin: 14px 0 6px; }
-  .milkdown-host .ProseMirror h3 { font-size: 18px; margin: 12px 0 6px; }
+  .milkdown-host .ProseMirror h1 { font-size: 26px; margin: 18px 0 10px; }
+  .milkdown-host .ProseMirror h2 { font-size: 22px; margin: 16px 0 8px; }
+  .milkdown-host .ProseMirror h3 { font-size: 18px; margin: 14px 0 6px; }
   .milkdown-host .ProseMirror img { max-width: 100%; height: auto; }
 
-  .preview-area {
-    min-height: 360px; padding: 14px 16px;
-    background: var(--bg-elev);
-    border: 1px solid var(--border); border-radius: 8px;
-    line-height: 1.6;
-    overflow-wrap: break-word;
+  /* Crepe ships several pieces of inline chrome (a drag handle on hover,
+     a tooltip toolbar on text selection). The redesign hides them all:
+     the bottom toolbar owns formatting, the slash menu stays for power
+     users. These selectors target Crepe's own classnames -- if a future
+     version renames them, the chrome resurfaces visually but functionally
+     nothing breaks. */
+  .milkdown-host :global(milkdown-block-handle),
+  .milkdown-host :global(.milkdown-block-handle),
+  .milkdown-host :global(milkdown-toolbar),
+  .milkdown-host :global(.milkdown-toolbar),
+  .milkdown-host :global(milkdown-tooltip),
+  .milkdown-host :global(.milkdown-tooltip),
+  .milkdown-host :global(.crepe-toolbar) {
+    display: none !important;
   }
-  /* The preview HTML is injected via innerHTML from the server-rendered
-     post body -- those elements don't carry Astro's data-astro-cid
-     scoping attribute, so child selectors have to be :global() to apply.
-     Without this the <picture>/<img> rendered by the markdown pipeline
-     ignored max-width and overflowed the page horizontally. */
+
+  /* ─── preview area ────────────────────────────────────────────────── */
+  .preview-area {
+    flex: 1;
+    padding: 20px 16px 80px;
+    max-width: 720px; margin: 0 auto; width: 100%;
+    line-height: 1.65; font-size: 17px;
+    overflow-y: auto;
+  }
   .preview-area :global(picture),
   .preview-area :global(img) {
     max-width: 100%; height: auto; border-radius: 4px; display: block;
@@ -187,6 +290,31 @@ const initialBodyImages = initial.bodyImages ?? [];
     color: var(--muted);
   }
   .preview-placeholder { color: var(--muted); font-size: 14px; }
+
+  /* ─── sticky bottom toolbar ──────────────────────────────────────── */
+  .bottom-toolbar {
+    position: sticky; bottom: 0;
+    display: flex; align-items: center; gap: 2px;
+    padding: 6px 8px calc(6px + var(--safe-bottom));
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border);
+    z-index: 6;
+  }
+  .tb {
+    min-height: 36px; min-width: 36px; padding: 6px 10px;
+    border: none; background: transparent;
+    border-radius: 8px;
+    font-size: 16px; line-height: 1;
+    color: var(--fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .tb:hover { background: rgba(0, 0, 0, 0.04); }
+  .tb[aria-pressed="true"] { background: #ebebeb; }
+  .tb strong { font-weight: 700; }
+  .tb em { font-style: italic; }
+  .tb-spacer { flex: 1; }
+  .tb-image { display: inline-flex; align-items: center; }
 </style>
 
 <script>
@@ -197,6 +325,7 @@ const initialBodyImages = initial.bodyImages ?? [];
     collapseImageTokens,
     rememberImage,
   } from '../scripts/image-tokens';
+  import { formatDateChip, formatTagsChip } from '../scripts/post-meta-chips';
 
   const form = document.getElementById('post-form') as HTMLFormElement;
   const body = document.getElementById('body-area') as HTMLTextAreaElement;
@@ -204,27 +333,40 @@ const initialBodyImages = initial.bodyImages ?? [];
   const previewArea = document.getElementById('preview-area') as HTMLElement;
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
   const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement | null;
+
+  // Chips + their hidden form inputs.
+  const chipDate = document.getElementById('chip-date') as HTMLButtonElement;
+  const chipTags = document.getElementById('chip-tags') as HTMLButtonElement;
+  const chipCover = document.getElementById('chip-cover') as HTMLButtonElement;
+  const chipCoverText = document.getElementById('chip-cover-text') as HTMLElement;
+  const dateInput = document.getElementById('date-input') as HTMLInputElement;
+  const tagsInput = document.getElementById('tags-input') as HTMLInputElement;
+  const slugInput = document.getElementById('slug-input') as HTMLInputElement;
+  const coverIdInput = document.getElementById('cover-image-id') as HTMLInputElement;
+
+  // Sheet editors -- one per chip.
+  const datePicker = document.getElementById('date-picker') as HTMLInputElement;
+  const tagsEditor = document.getElementById('tags-editor') as HTMLInputElement;
+  const slugEditor = document.getElementById('slug-editor') as HTMLInputElement;
+
+  // Cover sheet pieces.
   const coverPicker = document.getElementById('cover-picker') as HTMLInputElement;
   const coverThumbWrap = document.getElementById('cover-thumb-wrap') as HTMLElement;
   const coverThumb = document.getElementById('cover-thumb') as HTMLImageElement;
   const coverRemove = document.getElementById('cover-remove') as HTMLButtonElement;
-  const coverIdInput = document.getElementById('cover-image-id') as HTMLInputElement;
   const coverStatus = document.getElementById('cover-status') as HTMLElement;
   const coverUploadText = document.getElementById('cover-upload-text') as HTMLElement;
-  const tabs = document.querySelectorAll<HTMLButtonElement>('.tab');
+
+  // Bottom toolbar.
+  const bottomToolbar = document.getElementById('bottom-toolbar') as HTMLElement;
+  const imagePicker = document.getElementById('image-picker') as HTMLInputElement;
+  const previewToggle = document.getElementById('preview-toggle') as HTMLButtonElement;
+
+  const today = form.dataset.today!;
 
   // ─── editor: Milkdown WYSIWYG-markdown, falls back to textarea ──────────
-  // The textarea stays in the form so FormData still works; the editor
-  // mirrors its content there on every change. While Milkdown loads
-  // (async), the form is functional via the textarea alone.
-  //
-  // Body image flow: the SERVER ships a {uuid, url} list for every
-  // image:<uuid> token in the current body. Before mounting the editor
-  // we expand tokens to URLs so Crepe renders <img> inline. On every
-  // change we collapse URLs back to tokens before mirroring into the
-  // hidden textarea, keeping the save payload portable.
   let editor: BodyEditor | null = null;
-  const initialBodyRaw = body.value; // tokens
+  const initialBodyRaw = body.value;
   const bodyImagesRaw = JSON.parse(form.dataset.bodyImages || '[]') as Array<{ id: string; url: string }>;
   const imageMap = buildImageMapping(bodyImagesRaw);
   const initialBodyExpanded = expandImageTokens(initialBodyRaw, imageMap);
@@ -234,16 +376,10 @@ const initialBodyImages = initial.bodyImages ?? [];
       editor = await mountMilkdownEditor(
         editorMount,
         initialBodyExpanded,
-        (md) => {
-          // Mirror back to the textarea in storage form (tokens).
-          body.value = collapseImageTokens(md, imageMap);
-        },
+        (md) => { body.value = collapseImageTokens(md, imageMap); },
         {
           uploadImage: compressAndUpload,
           onImageUploaded: (entry) => {
-            // Register both URLs: the canonical first (so reverse-direction
-            // collapse covers both), then the editor URL last so the
-            // forward direction resolves tokens to the smaller variant.
             rememberImage(imageMap, { id: entry.id, url: entry.url });
             if (entry.editorUrl && entry.editorUrl !== entry.url) {
               rememberImage(imageMap, { id: entry.id, url: entry.editorUrl });
@@ -252,21 +388,16 @@ const initialBodyImages = initial.bodyImages ?? [];
         },
       );
     } catch (err) {
-      // Milkdown failed to load. Reveal the textarea so the user can
-      // still write. This is the no-JS / load-error escape hatch.
       console.error('Editor failed to load, falling back to textarea:', err);
       body.hidden = false;
       editorMount.style.display = 'none';
       const { mountTextareaEditor } = await import('../scripts/body-editor');
-      editor = mountTextareaEditor(body, initialBodyRaw); // tokens stay as-is in textarea fallback
+      editor = mountTextareaEditor(body, initialBodyRaw);
     }
   })();
 
-  // Pulls the current markdown in STORAGE form (tokens, not URLs).
   const currentBody = () => {
-    if (editor) {
-      return collapseImageTokens(editor.getMarkdown(), imageMap);
-    }
+    if (editor) return collapseImageTokens(editor.getMarkdown(), imageMap);
     return body.value;
   };
 
@@ -274,11 +405,55 @@ const initialBodyImages = initial.bodyImages ?? [];
   const postId = form.dataset.postId || null;
   const mode = form.dataset.mode!;
 
-  // ─── image compression + upload ─────────────────────────────────────────
-  // Generates multiple sizes from the source image at the same JPEG
-  // quality (0.85) so the browser can pick the right resolution for the
-  // viewport via srcset/sizes without ever serving an oversized file.
-  // Widths larger than the original are skipped (no upscaling).
+  // ─── meta sheets: only one open at a time ───────────────────────────
+  const sheets = new Map<string, HTMLElement>([
+    ['date', document.getElementById('sheet-date') as HTMLElement],
+    ['tags', document.getElementById('sheet-tags') as HTMLElement],
+    ['cover', document.getElementById('sheet-cover') as HTMLElement],
+    ['more', document.getElementById('sheet-more') as HTMLElement],
+  ]);
+  const chipBySheet = new Map<string, HTMLButtonElement | null>([
+    ['date', chipDate],
+    ['tags', chipTags],
+    ['cover', chipCover],
+    ['more', null],
+  ]);
+
+  function openSheet(name: string) {
+    for (const [n, el] of sheets) {
+      const open = n === name;
+      el.hidden = !open;
+      const chip = chipBySheet.get(n);
+      if (chip) chip.setAttribute('aria-pressed', open ? 'true' : 'false');
+    }
+  }
+  function closeSheets() {
+    for (const [, el] of sheets) el.hidden = true;
+    for (const [, chip] of chipBySheet) if (chip) chip.setAttribute('aria-pressed', 'false');
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-sheet]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.sheet!;
+      const sheet = sheets.get(name);
+      if (!sheet) return;
+      if (sheet.hidden) openSheet(name);
+      else closeSheets();
+    });
+  });
+
+  // ─── chip ⇄ hidden input wiring ─────────────────────────────────────
+  datePicker.addEventListener('change', () => {
+    dateInput.value = datePicker.value;
+    chipDate.querySelector('.chip-text')!.textContent = formatDateChip(datePicker.value || null, today);
+  });
+  tagsEditor.addEventListener('input', () => {
+    tagsInput.value = tagsEditor.value;
+    chipTags.querySelector('.chip-text')!.textContent = formatTagsChip(tagsEditor.value);
+  });
+  slugEditor.addEventListener('input', () => { slugInput.value = slugEditor.value; });
+
+  // ─── image compression + upload (unchanged from prior version) ──────
   const VARIANT_TARGETS = [400, 800, 1200, 1600];
 
   async function resizeAt(bitmap: ImageBitmap, targetWidth: number, type: string, quality = 0.85): Promise<{ blob: Blob; width: number; height: number } | null> {
@@ -294,23 +469,13 @@ const initialBodyImages = initial.bodyImages ?? [];
 
   async function compressAndUpload(file: File): Promise<{ id: string; url: string; editorUrl?: string } | null> {
     const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-
-    // Generate every target ≤ original width. The largest one becomes
-    // the primary; smaller ones are variants. For each width we also
-    // produce a WebP variant -- ~30% smaller than JPEG at the same
-    // visual quality.
     const wantWidths = VARIANT_TARGETS.filter((w) => w <= bitmap.width);
     if (wantWidths.length === 0) wantWidths.push(bitmap.width);
-    // Canvas.toBlob's WebP encoder is much less aggressive than cwebp at
-    // the same nominal quality -- 0.85 produces files 3-4x larger. Use a
-    // lower quality for WebP. JPEG quality 0.80 is still visually
-    // indistinguishable from the source and trims ~15% off the byte size.
     const jpegResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/jpeg', 0.80)));
     const webpResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/webp', 0.65)));
     const jpegs = jpegResults.filter((r): r is NonNullable<typeof r> => r !== null);
     if (jpegs.length === 0) return null;
     const webps = webpResults.filter((r): r is NonNullable<typeof r> => r !== null);
-
     jpegs.sort((a, b) => b.width - a.width);
     webps.sort((a, b) => b.width - a.width);
     const primary = jpegs[0];
@@ -320,30 +485,52 @@ const initialBodyImages = initial.bodyImages ?? [];
     fd.append('width', String(primary.width));
     fd.append('height', String(primary.height));
     const stem = file.name.replace(/\.[^.]+$/, '');
-    for (const v of jpegs) {
-      fd.append(`file_${v.width}`, v.blob, `${stem}.${v.width}w.jpg`);
-    }
-    for (const v of webps) {
-      fd.append(`file_${v.width}_webp`, v.blob, `${stem}.${v.width}w.webp`);
-    }
+    for (const v of jpegs) fd.append(`file_${v.width}`, v.blob, `${stem}.${v.width}w.jpg`);
+    for (const v of webps) fd.append(`file_${v.width}_webp`, v.blob, `${stem}.${v.width}w.webp`);
 
     const r = await fetch('/admin/api/upload', { method: 'POST', body: fd });
     if (!r.ok) return null;
     return await r.json();
   }
 
-  // ─── cover image ────────────────────────────────────────────────────────
+  // ─── cover image ────────────────────────────────────────────────────
   function setCover(id: string, url: string) {
     coverIdInput.value = id;
     coverThumb.src = url;
     coverThumbWrap.style.display = '';
     coverUploadText.textContent = 'replace';
+    // Refresh the chip: thumbnail + "cover" label.
+    chipCover.dataset.hasCover = 'true';
+    chipCoverText.textContent = 'cover';
+    const existingIcon = document.getElementById('chip-cover-icon');
+    if (existingIcon) existingIcon.remove();
+    const existingThumb = document.getElementById('chip-cover-thumb');
+    if (existingThumb) {
+      (existingThumb as HTMLImageElement).src = url;
+    } else {
+      const img = document.createElement('img');
+      img.id = 'chip-cover-thumb';
+      img.className = 'chip-thumb';
+      img.src = url; img.alt = 'cover';
+      chipCover.insertBefore(img, chipCoverText);
+    }
   }
   function clearCover() {
     coverIdInput.value = '';
     coverThumb.src = '';
     coverThumbWrap.style.display = 'none';
     coverUploadText.textContent = '+ choose cover';
+    chipCover.dataset.hasCover = 'false';
+    chipCoverText.textContent = '+ cover';
+    const existingThumb = document.getElementById('chip-cover-thumb');
+    if (existingThumb) existingThumb.remove();
+    if (!document.getElementById('chip-cover-icon')) {
+      const span = document.createElement('span');
+      span.id = 'chip-cover-icon';
+      span.className = 'chip-icon';
+      span.textContent = '🖼';
+      chipCover.insertBefore(span, chipCoverText);
+    }
   }
   coverPicker.addEventListener('change', async () => {
     const f = coverPicker.files?.[0];
@@ -357,46 +544,81 @@ const initialBodyImages = initial.bodyImages ?? [];
   });
   coverRemove.addEventListener('click', () => clearCover());
 
-  // (Milkdown handles markdown formatting via its slash menu + inline
-  // toolbar. The old ad-hoc wrap/prefix/insertLink helpers are gone.)
+  // ─── bottom toolbar bindings ────────────────────────────────────────
+  bottomToolbar.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-cmd]');
+    if (!btn || !editor) return;
+    const cmd = btn.dataset.cmd!;
+    switch (cmd) {
+      case 'bold': editor.toggleBold(); break;
+      case 'italic': editor.toggleItalic(); break;
+      case 'blockquote': editor.toggleBlockquote(); break;
+      case 'list': editor.toggleBulletList(); break;
+      case 'link': {
+        const url = prompt('Link URL');
+        if (url) editor.insertLink(url);
+        break;
+      }
+      case 'preview': togglePreview(); break;
+    }
+  });
 
-  // ─── write / preview tabs ───────────────────────────────────────────────
-  async function renderPreview() {
+  imagePicker.addEventListener('change', async () => {
+    const files = Array.from(imagePicker.files ?? []);
+    imagePicker.value = '';
+    for (const file of files) {
+      const r = await compressAndUpload(file);
+      if (!r) continue;
+      const renderUrl = r.editorUrl ?? r.url;
+      if (renderUrl !== r.url) rememberImage(imageMap, { id: r.id, url: r.url });
+      rememberImage(imageMap, { id: r.id, url: renderUrl });
+      if (editor) {
+        editor.insertImageBlock(renderUrl);
+        body.value = collapseImageTokens(editor.getMarkdown(), imageMap);
+      } else {
+        body.value += `\n![](image:${r.id})\n`;
+      }
+    }
+  });
+
+  // ─── preview toggle (replaces the write/preview tabs) ───────────────
+  async function togglePreview() {
+    const showingPreview = !previewArea.hidden;
+    if (showingPreview) {
+      previewArea.hidden = true;
+      editorMount.style.display = '';
+      previewToggle.setAttribute('aria-pressed', 'false');
+      return;
+    }
+    previewArea.hidden = false;
+    editorMount.style.display = 'none';
+    previewToggle.setAttribute('aria-pressed', 'true');
     previewArea.innerHTML = '<div class="preview-placeholder">rendering…</div>';
     const r = await fetch('/admin/api/preview', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ siteId, body: currentBody() }),
     });
-    if (!r.ok) { previewArea.innerHTML = `<div class="preview-placeholder">preview failed</div>`; return; }
+    if (!r.ok) {
+      previewArea.innerHTML = `<div class="preview-placeholder">preview failed</div>`;
+      return;
+    }
     const html = await r.text();
     previewArea.innerHTML = html || '<div class="preview-placeholder">nothing to preview yet…</div>';
   }
-  tabs.forEach((t) => t.addEventListener('click', async () => {
-    tabs.forEach((x) => x.classList.toggle('active', x === t));
-    if (t.dataset.tab === 'preview') {
-      editorMount.style.display = 'none';
-      previewArea.style.display = '';
-      await renderPreview();
-    } else {
-      previewArea.style.display = 'none';
-      editorMount.style.display = '';
-    }
-  }));
 
-  // ─── save / delete ──────────────────────────────────────────────────────
+  // ─── save / delete ──────────────────────────────────────────────────
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    saveBtn.disabled = true; saveBtn.textContent = 'saving…';
+    saveBtn.disabled = true;
+    const originalLabel = saveBtn.textContent;
+    saveBtn.textContent = 'saving…';
     const fd = new FormData(form);
     const payload = {
       mode, postId, siteId,
       title: fd.get('title'),
       slug: fd.get('slug') || undefined,
       date: fd.get('date'),
-      // Read directly from the editor so we never miss a Milkdown change
-      // that hasn't been mirrored back to the textarea yet (e.g. if the
-      // user smashes save mid-typing).
       body: currentBody(),
       tagNames: String(fd.get('tags') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
       coverImageId: coverIdInput.value || null,
@@ -407,7 +629,8 @@ const initialBodyImages = initial.bodyImages ?? [];
       body: JSON.stringify(payload),
     });
     if (!r.ok) {
-      saveBtn.disabled = false; saveBtn.textContent = 'save';
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalLabel;
       alert('save failed: ' + await r.text());
       return;
     }

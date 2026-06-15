@@ -1,6 +1,12 @@
 ---
-interface Props { title?: string }
-const { title = 'hoavv editor' } = Astro.props;
+interface Props {
+  title?: string;
+  /** When true, hides the global app header and removes the centered
+   *  main padding so the page can own its own chrome (the post editor
+   *  ships its own header + status row + sticky bottom toolbar). */
+  bare?: boolean;
+}
+const { title = 'hoavv editor', bare = false } = Astro.props;
 const session = Astro.locals.session;
 ---
 <!DOCTYPE html>
@@ -53,6 +59,7 @@ const session = Astro.locals.session;
       .app-header h1 { font-size: 17px; font-weight: 600; }
       .app-header .who { font-size: 13px; color: var(--muted); }
       main { padding: 16px; max-width: 720px; margin: 0 auto; }
+      main.bare { padding: 0; max-width: none; margin: 0; }
       .save-bar {
         position: fixed; left: 0; right: 0; bottom: 0;
         padding: 12px 16px calc(12px + var(--safe-bottom));
@@ -63,11 +70,13 @@ const session = Astro.locals.session;
     </style>
   </head>
   <body>
-    <header class="app-header">
-      <h1><a href="/admin">hoavv editor</a></h1>
-      {session && <span class="who">{session.githubLogin} · <a href="/logout">sign out</a></span>}
-    </header>
-    <main>
+    {!bare && (
+      <header class="app-header">
+        <h1><a href="/admin">hoavv editor</a></h1>
+        {session && <span class="who">{session.githubLogin} · <a href="/logout">sign out</a></span>}
+      </header>
+    )}
+    <main class={bare ? 'bare' : ''}>
       <slot />
     </main>
   </body>
