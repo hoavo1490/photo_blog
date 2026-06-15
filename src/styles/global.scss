@@ -39,7 +39,10 @@ time { font-family: #{$time-font}; }
 header.site-header {
   @include page;
   text-align: justify;
-  margin: 3em auto;
+  // Was 3em auto -- felt like ~100px of dead space stacking with the
+  // article's own top margin. 1em + auto pushes the header close to the
+  // viewport top without crowding the nav icons.
+  margin: 1em auto;
   &:after { content: ''; width: 100%; display: inline-block; }
 
   .site-title {
