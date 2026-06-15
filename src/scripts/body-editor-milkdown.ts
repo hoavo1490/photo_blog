@@ -14,15 +14,41 @@ import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
 
 import type { BodyEditor } from './body-editor';
+import { createCrepeUploadHandler, type UploadResult } from './crepe-upload';
+
+export interface MountMilkdownOptions {
+  /** Compress + upload a File to our R2 backend. Called by Crepe when
+   *  the user picks "Image" from the slash menu, drops an image into
+   *  the editor, or pastes one from the clipboard. Returns the
+   *  resolved {id, url} (or null on failure). */
+  uploadImage?: (file: File) => Promise<UploadResult | null>;
+  /** Side-effect fired whenever uploadImage succeeds. The host (the
+   *  PostForm) uses this to register the new {id, url} in its image
+   *  map so save-time token-collapse picks up the new image. */
+  onImageUploaded?: (entry: UploadResult) => void;
+}
 
 export async function mountMilkdownEditor(
   root: HTMLElement,
   initial: string,
   onChange?: (md: string) => void,
+  options: MountMilkdownOptions = {},
 ): Promise<BodyEditor> {
+  // Wire Crepe's ImageBlock feature to our upload pipeline. The
+  // feature handles slash-menu "Image", drag-drop, and clipboard
+  // paste -- all funnel through onUpload(file) -> Promise<string>.
+  const featureConfigs = options.uploadImage
+    ? {
+        [Crepe.Feature.ImageBlock]: {
+          onUpload: createCrepeUploadHandler(options.uploadImage, options.onImageUploaded),
+        },
+      }
+    : undefined;
+
   const crepe = new Crepe({
     root,
     defaultValue: initial,
+    featureConfigs,
   });
   await crepe.create();
 

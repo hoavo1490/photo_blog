@@ -253,10 +253,18 @@ const initialBodyImages = initial.bodyImages ?? [];
   (async () => {
     try {
       const { mountMilkdownEditor } = await import('../scripts/body-editor-milkdown');
-      editor = await mountMilkdownEditor(editorMount, initialBodyExpanded, (md) => {
-        // Mirror back to the textarea in storage form (tokens).
-        body.value = collapseImageTokens(md, imageMap);
-      });
+      editor = await mountMilkdownEditor(
+        editorMount,
+        initialBodyExpanded,
+        (md) => {
+          // Mirror back to the textarea in storage form (tokens).
+          body.value = collapseImageTokens(md, imageMap);
+        },
+        {
+          uploadImage: compressAndUpload,
+          onImageUploaded: (entry) => rememberImage(imageMap, entry),
+        },
+      );
     } catch (err) {
       // Milkdown failed to load. Reveal the textarea so the user can
       // still write. This is the no-JS / load-error escape hatch.
