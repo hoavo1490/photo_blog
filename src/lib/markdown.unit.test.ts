@@ -161,6 +161,26 @@ describe('rewriteImageTokens', () => {
     expect(out).toContain('height="1200"');
   });
 
+  it('labels the canonical srcset entry with the primary width (not a hardcoded 1600w)', () => {
+    // The primary R2 object is the LARGEST variant by definition. With the
+    // new 2400w target tier in place, the primary can now be 2400px wide.
+    // The srcset entry for `resolved.url` has to declare that real width
+    // so the browser doesn't underpick on hi-DPR / lightbox use.
+    const out = rewriteImageTokens(`![pic](image:${UUID_A})`, (id) =>
+      id === UUID_A
+        ? {
+            url: 'https://cdn/big.jpg',
+            variantWidths: [400, 800, 1200, 1600],
+            variantUrlBase: 'https://cdn/big.jpg',
+            width: 2400,
+            height: 1600,
+          }
+        : null,
+    );
+    expect(out).toContain('https://cdn/big.jpg 2400w');
+    expect(out).not.toContain('https://cdn/big.jpg 1600w');
+  });
+
   it('escapes alt text into HTML attributes', () => {
     const out = rewriteImageTokens(`![he said "hi" & <ok>](image:${UUID_A})`, resolver);
     expect(out).toContain('alt="he said &quot;hi&quot; &amp; &lt;ok>"');

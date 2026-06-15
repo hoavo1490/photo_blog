@@ -139,10 +139,16 @@ function buildPictureHtml(resolved: ResolvedImage, alt: string, priority: boolea
     sources.push(`<source type="image/avif" srcset="${avifSet}" sizes="${BODY_IMAGE_SIZES}" />`);
   }
   sources.push(`<source type="image/webp" srcset="${webpSet}" sizes="${BODY_IMAGE_SIZES}" />`);
+  // The primary R2 object is the largest variant by definition. Label
+  // the canonical srcset entry with its real natural width so the
+  // browser can pick it (and the lightbox can use it) on hi-DPR / 4K
+  // viewports. Falls back to 1600 for legacy posts that didn't record
+  // the primary's intrinsic width.
+  const primaryWidth = resolved.width && resolved.width > 0 ? resolved.width : 1600;
   return [
     '<picture>',
     ...sources,
-    `<img src="${resolved.url}" srcset="${jpegSet}, ${resolved.url} 1600w" sizes="${BODY_IMAGE_SIZES}" alt="${escapeAttr(alt)}"${dim} loading="${loading}" decoding="${decoding}"${fetchAttr} data-pswp-src="${resolved.url}" />`,
+    `<img src="${resolved.url}" srcset="${jpegSet}, ${resolved.url} ${primaryWidth}w" sizes="${BODY_IMAGE_SIZES}" alt="${escapeAttr(alt)}"${dim} loading="${loading}" decoding="${decoding}"${fetchAttr} data-pswp-src="${resolved.url}" />`,
     '</picture>',
   ].join('');
 }
