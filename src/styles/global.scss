@@ -80,7 +80,7 @@ ul.listing {
   li {
     padding: 0;
     &.listing-item { a { padding: .2em 0 .2em 2em; } time { color: #6e6e6e; } &:hover { background-color: #f9f9f9; } }
-    &.listing-seperator { font-family: #{$label-font}; &:before { content: "⭠ "; color: #ccc; } }
+    &.listing-seperator { font-family: #{$label-font}; &:before { content: "\2190\a0"; color: #6e6e6e; } }
   }
 }
 
