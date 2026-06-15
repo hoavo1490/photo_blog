@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { freshDb, clearAllTables } from '../../tests/setup/pglite';
-import type { PgliteDriver } from '../lib/db/pglite-driver';
-import * as posts from '../lib/db/posts';
-import * as sites from '../lib/db/sites';
-import { GET } from './atom.xml';
+import { freshDb, clearAllTables } from '../../setup/pglite';
+import type { PgliteDriver } from '../../../src/lib/db/pglite-driver';
+import * as posts from '../../../src/lib/db/posts';
+import * as sites from '../../../src/lib/db/sites';
+import { GET } from '../../../src/pages/atom.xml';
 
 let driver: PgliteDriver;
 

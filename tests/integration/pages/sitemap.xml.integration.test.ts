@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { freshDb, clearAllTables } from '../../tests/setup/pglite';
-import type { PgliteDriver } from '../lib/db/pglite-driver';
-import * as posts from '../lib/db/posts';
-import * as sites from '../lib/db/sites';
-import * as tagsRepo from '../lib/db/tags';
-import { GET } from './sitemap.xml';
+import { freshDb, clearAllTables } from '../../setup/pglite';
+import type { PgliteDriver } from '../../../src/lib/db/pglite-driver';
+import * as posts from '../../../src/lib/db/posts';
+import * as sites from '../../../src/lib/db/sites';
+import * as tagsRepo from '../../../src/lib/db/tags';
+import { GET } from '../../../src/pages/sitemap.xml';
 
 let driver: PgliteDriver;
 

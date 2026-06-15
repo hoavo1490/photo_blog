@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { freshDb, clearAllTables } from '../../../../tests/setup/pglite';
-import type { PgliteDriver } from '../../../lib/db/pglite-driver';
-import * as posts from '../../../lib/db/posts';
-import * as sites from '../../../lib/db/sites';
-import * as users from '../../../lib/db/users';
-import * as tags from '../../../lib/db/tags';
-import { POST as savePOST } from './save';
+import { freshDb, clearAllTables } from '../../../setup/pglite';
+import type { PgliteDriver } from '../../../../src/lib/db/pglite-driver';
+import * as posts from '../../../../src/lib/db/posts';
+import * as sites from '../../../../src/lib/db/sites';
+import * as users from '../../../../src/lib/db/users';
+import * as tags from '../../../../src/lib/db/tags';
+import { POST as savePOST } from '../../../../src/pages/admin/api/save';
 
 // Direct invocation of the save.ts APIRoute against PGLite. We stub the
 // `ctx.locals` shape rather than threading through the full middleware --
