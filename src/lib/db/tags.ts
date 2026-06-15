@@ -122,19 +122,50 @@ export async function setPostTags(driver: SqlDriver, input: SetPostTagsInput): P
     throw new Error(`setPostTags: post ${input.postId} does not belong to site ${input.siteId}`);
   }
 
-  // Upsert each tag and collect ids.
-  const tagIds: string[] = [];
+  // Compute (slug, name) pairs up front so we can drive a single SQL
+  // statement. Empty / collision input is filtered: an empty slug from
+  // findOrCreate would throw, and duplicates (same slug, different
+  // casing) would violate the unique (site_id, slug) constraint in the
+  // upsert CTE if not deduped.
+  const seen = new Set<string>();
+  const slugs: string[] = [];
+  const names: string[] = [];
   for (const name of input.tagNames) {
-    const t = await findOrCreate(driver, { siteId: input.siteId, name });
-    tagIds.push(t.id);
+    const slug = slugify(name);
+    if (!slug) throw new Error(`setPostTags: name '${name}' slugifies to empty string`);
+    if (seen.has(slug)) continue;
+    seen.add(slug);
+    slugs.push(slug);
+    names.push(name);
   }
 
-  // Replace the join rows. Simplest correct approach: delete all then insert.
-  await driver.exec(`DELETE FROM post_tags WHERE post_id = $1`, [input.postId]);
-  for (const tagId of tagIds) {
-    await driver.exec(
-      `INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2)`,
-      [input.postId, tagId],
-    );
-  }
+  // Rewrite post_tags atomically in a single statement. Each Postgres
+  // statement is its own transaction, so this is safe across both the
+  // Neon HTTP driver (one round-trip per statement) and the in-process
+  // PGLite driver. A mid-flight failure can no longer leave the post
+  // tagless.
+  //
+  // Implementation note: a single statement can't both DELETE and INSERT
+  // the same (post_id, tag_id) pair -- the two CTEs share a snapshot and
+  // a UNIQUE-violation error or undefined behavior would result. So we
+  // compute the set difference instead: delete pairs that are no longer
+  // desired, then insert pairs that are new. Same end state as the old
+  // "wipe and reinsert" approach.
+  await driver.exec(
+    `WITH
+       desired AS (
+         INSERT INTO tags (site_id, slug, name)
+         SELECT $1, t.slug, t.name FROM unnest($2::text[], $3::text[]) AS t(slug, name)
+         ON CONFLICT (site_id, slug) DO UPDATE SET name = tags.name
+         RETURNING id
+       ),
+       deleted AS (
+         DELETE FROM post_tags
+         WHERE post_id = $4 AND tag_id NOT IN (SELECT id FROM desired)
+       )
+     INSERT INTO post_tags (post_id, tag_id)
+     SELECT $4, id FROM desired
+     ON CONFLICT (post_id, tag_id) DO NOTHING`,
+    [input.siteId, slugs, names, input.postId],
+  );
 }

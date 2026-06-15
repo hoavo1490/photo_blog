@@ -73,6 +73,37 @@ describe('tags.setPostTags', () => {
       tags.setPostTags(driver, { siteId, postId: p.id, tagNames: ['leica'] })
     ).rejects.toThrow();
   });
+
+  it('is atomic: a mid-flight failure must not leave tags partially deleted', async () => {
+    // Seed the post with tags A + B.
+    const p = await posts.createDraft(driver, { siteId, slug: 'p', title: 'P', body: '' });
+    await tags.setPostTags(driver, { siteId, postId: p.id, tagNames: ['a', 'b'] });
+    expect(
+      (await tags.listForPost(driver, { siteId, postId: p.id })).map((t) => t.slug).sort(),
+    ).toEqual(['a', 'b']);
+
+    // Wrap the driver so the rewrite path fails partway. Each Neon HTTP
+    // request is its own transaction, so a failure between DELETE and
+    // the subsequent INSERTs corrupts state. We simulate that: let the
+    // DELETE succeed, then make the next INSERT into post_tags throw.
+    const fragile = {
+      query: driver.query.bind(driver),
+      exec: async (text: string, params?: unknown[]) => {
+        if (/INSERT\s+INTO\s+post_tags/i.test(text)) {
+          throw new Error('induced failure');
+        }
+        return driver.exec(text, params);
+      },
+    };
+    await expect(
+      tags.setPostTags(fragile, { siteId, postId: p.id, tagNames: ['c', 'd'] }),
+    ).rejects.toThrow(/induced failure/);
+
+    // The original set must still be present; we must not have left the
+    // post tagless (partial DELETE + no INSERTs).
+    const after = await tags.listForPost(driver, { siteId, postId: p.id });
+    expect(after.map((t) => t.slug).sort()).toEqual(['a', 'b']);
+  });
 });
 
 describe('tags.listForSite', () => {

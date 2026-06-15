@@ -106,4 +106,40 @@ describe('loadSession', () => {
       await loadSession(driver, '00000000-0000-0000-0000-000000000000'),
     ).toBeNull();
   });
+
+  it('wraps the touch update in waitUntil when a context is provided', async () => {
+    const oauth = makeFakeGitHubOAuth();
+    const login = await completeLogin(driver, oauth, [], baseInput);
+
+    // Capture the work passed to waitUntil; on Workers this is how
+    // post-response work survives the response being sent.
+    const pending: Promise<unknown>[] = [];
+    const waitUntil = (p: Promise<unknown>) => { pending.push(p); };
+
+    const loaded = await loadSession(driver, login.sessionId, waitUntil);
+    expect(loaded).not.toBeNull();
+    expect(pending.length).toBe(1);
+
+    // Await the deferred work and observe that last_used_at advanced.
+    const beforeRow = await driver.query<{ last_used_at: string }>(
+      `SELECT last_used_at FROM sessions WHERE id = $1`,
+      [login.sessionId],
+    );
+    await Promise.all(pending);
+    const afterRow = await driver.query<{ last_used_at: string }>(
+      `SELECT last_used_at FROM sessions WHERE id = $1`,
+      [login.sessionId],
+    );
+    expect(new Date(afterRow[0].last_used_at).getTime())
+      .toBeGreaterThanOrEqual(new Date(beforeRow[0].last_used_at).getTime());
+  });
+
+  it('still touches (fire-and-forget) when no waitUntil is provided', async () => {
+    // Back-compat: callers that omit the ctx parameter (tests, future
+    // non-Worker callers) get the previous fire-and-forget behavior.
+    const oauth = makeFakeGitHubOAuth();
+    const login = await completeLogin(driver, oauth, [], baseInput);
+    const loaded = await loadSession(driver, login.sessionId);
+    expect(loaded).not.toBeNull();
+  });
 });

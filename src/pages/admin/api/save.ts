@@ -44,6 +44,10 @@ export const POST: APIRoute = async (ctx) => {
       coverImageId: coverImageId ?? null,
     });
     postId = created.id;
+    // First save is the state transition draft -> published; the form's
+    // date acts as the published_at stamp.
+    const publishedAt = b.date ? new Date(`${b.date}T12:00:00Z`) : undefined;
+    await posts.publish(driver, { siteId: b.siteId, id: postId, publishedAt });
   } else {
     if (!b.postId) return new Response('postId required for edit', { status: 400 });
     const updated = await posts.update(driver, {
@@ -52,11 +56,12 @@ export const POST: APIRoute = async (ctx) => {
     });
     if (!updated) return new Response('not found', { status: 404 });
     postId = updated.id;
+    // On edit we deliberately do NOT call posts.publish: publish is a
+    // state transition, not a re-save. The form's date input always
+    // defaults to today, so passing it through here would silently
+    // move published_at on every edit and break the /YYYY/MM/DD/slug
+    // URLs of every previously published post.
   }
-
-  // Publish + set date (treat the form's date as published_at).
-  const publishedAt = b.date ? new Date(`${b.date}T12:00:00Z`) : undefined;
-  await posts.publish(driver, { siteId: b.siteId, id: postId, publishedAt });
 
   // Replace tag set.
   await tags.setPostTags(driver, { siteId: b.siteId, postId, tagNames: b.tagNames });
