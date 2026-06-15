@@ -235,24 +235,52 @@ const tagsChipText = formatTagsChip(initialTagNames);
   }
 
   /* ─── editor surface ─────────────────────────────────────────────── */
+  /* Every selector that targets Crepe-managed DOM has to use :global()
+     because the .ProseMirror div / .milkdown-image-block etc are
+     created at runtime by Crepe -- they don't carry Astro's
+     data-astro-cid-* scoping attribute, so unscoped rules silently
+     don't match. */
   .milkdown-host {
     flex: 1;
     background: var(--bg-elev);
     overflow-y: auto;
   }
-  .milkdown-host .ProseMirror {
+  .milkdown-host :global(.ProseMirror) {
     max-width: 720px; margin: 0 auto;
     padding: 20px 16px 80px;
     min-height: 100%;
     outline: none;
     font-size: 17px;
     line-height: 1.65;
+    box-sizing: border-box;
   }
-  .milkdown-host .ProseMirror p { margin: 8px 0; }
-  .milkdown-host .ProseMirror h1 { font-size: 26px; margin: 18px 0 10px; }
-  .milkdown-host .ProseMirror h2 { font-size: 22px; margin: 16px 0 8px; }
-  .milkdown-host .ProseMirror h3 { font-size: 18px; margin: 14px 0 6px; }
-  .milkdown-host .ProseMirror img { max-width: 100%; height: auto; }
+  .milkdown-host :global(.ProseMirror p) { margin: 8px 0; }
+  .milkdown-host :global(.ProseMirror h1) { font-size: 26px; margin: 18px 0 10px; }
+  .milkdown-host :global(.ProseMirror h2) { font-size: 22px; margin: 16px 0 8px; }
+  .milkdown-host :global(.ProseMirror h3) { font-size: 18px; margin: 14px 0 6px; }
+
+  /* Make every image-block render full-width with its image centered.
+     Crepe's defaults give the wrapper `width: fit-content; margin: 0
+     auto`, which only centers when the block-level parent has a known
+     width -- combined with `min-height: 100px; object-fit: cover` the
+     smaller images get cropped + offset. Force a clean centered block:
+     image at intrinsic ratio, no min-height, no crop. */
+  .milkdown-host :global(.milkdown-image-block) {
+    display: block;
+    width: 100%;
+    margin: 16px 0;
+  }
+  .milkdown-host :global(.milkdown-image-block .image-wrapper) {
+    margin: 0 auto !important;
+    max-width: 100%;
+  }
+  .milkdown-host :global(.milkdown-image-block .image-wrapper img) {
+    max-width: 100%;
+    height: auto;
+    min-height: 0 !important;
+    object-fit: contain !important;
+    display: block;
+  }
 
   /* Crepe ships several pieces of inline chrome (a drag handle on hover,
      a tooltip toolbar on text selection). The redesign hides them all:
