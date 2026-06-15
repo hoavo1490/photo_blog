@@ -41,7 +41,7 @@ const TOKEN_URL = 'https://github.com/login/oauth/access_token';
 const API_USER_URL = 'https://api.github.com/user';
 const API_EMAILS_URL = 'https://api.github.com/user/emails';
 // GitHub requires a User-Agent header on all API requests.
-const USER_AGENT = 'riovv-blog (+https://riovv.com)';
+const USER_AGENT = 'hoavv-blog (+https://hoavv.com)';
 
 interface GhUserResponse {
   id: number;

@@ -26,7 +26,7 @@ const rows = await (driver as SqlDriver).query<{
 );
 const posts = rows.map((r) => ({ slug: r.slug, title: r.title, publishedAt: new Date(r.published_at) }));
 ---
-<BaseLayout title={`#${tag.name}`} description={`Posts tagged ${tag.name} on riovv.`}>
+<BaseLayout title={`#${tag.name}`} description={`Posts tagged ${tag.name} on hoavv.`}>
   <article>
     <section class="title"><h1>#{tag.name}</h1></section>
     <section class="post">

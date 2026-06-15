@@ -88,7 +88,7 @@ describe('exchangeCode', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].method).toBe('POST');
     expect(calls[0].headers['accept']).toBe('application/json');
-    expect(calls[0].headers['user-agent']).toMatch(/riovv/i);
+    expect(calls[0].headers['user-agent']).toMatch(/hoavv/i);
     const sent = JSON.parse(calls[0].body!);
     expect(sent).toEqual({
       client_id: 'abc123',
@@ -145,7 +145,7 @@ describe('fetchUser', () => {
     // Headers on both calls.
     for (const c of calls) {
       expect(c.headers['authorization']).toBe('Bearer gho_xyz');
-      expect(c.headers['user-agent']).toMatch(/riovv/i);
+      expect(c.headers['user-agent']).toMatch(/hoavv/i);
     }
   });
 

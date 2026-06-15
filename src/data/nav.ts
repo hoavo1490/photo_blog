@@ -6,5 +6,5 @@ export const nav: NavItem[] = [
   { title: 'About',   icon: 'user',    href: '/about' },
 ];
 
-export const defaultSiteName = 'riovv';
+export const defaultSiteName = 'hoavv';
 export const defaultAuthor = 'Rio';
