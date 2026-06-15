@@ -261,7 +261,10 @@ const initialCoverUrl = initial.coverUrl ?? '';
       status.textContent = `uploading ${file.name}…`;
       const r = await compressAndUpload(file);
       if (!r) { status.textContent = `upload failed: ${file.name}`; continue; }
-      insertAtCursor(`\n![${file.name.replace(/\.[^.]+$/, '')}](image:${r.id})\n`);
+      // Insert with empty alt -- the auto-filename is meaningless to
+      // screen readers and the renderer strips slug-shaped alts anyway.
+      // Authors can type caption text into the brackets after insertion.
+      insertAtCursor(`\n![](image:${r.id})\n`);
       status.textContent = `inserted ${file.name}`;
     }
   });

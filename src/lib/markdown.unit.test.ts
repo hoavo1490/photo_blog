@@ -183,11 +183,36 @@ describe('rewriteImageTokens', () => {
     expect(out).toContain('alt=""');
   });
 
-  it('keeps inline alt even if it is digit-only (user intent wins)', () => {
+  it('keeps short digit inline alt (4-digit year-like captions pass through)', () => {
     const out = rewriteImageTokens(`![2024](image:${UUID_A})`, (id) =>
       id === UUID_A ? { url: 'https://cdn/a.jpg', alt: '1000045235' } : null,
     );
     expect(out).toContain('alt="2024"');
+  });
+
+  it('strips inline slug alt but lets a meaningful resolver alt win', () => {
+    // The editor auto-fills the inline alt from the upload filename.
+    // If the row carries a real caption set elsewhere, that promotes.
+    const out = rewriteImageTokens(`![1000045235](image:${UUID_A})`, (id) =>
+      id === UUID_A ? { url: 'https://cdn/a.jpg', alt: 'sunset over Sơn Trà' } : null,
+    );
+    expect(out).toContain('alt="sunset over Sơn Trà"');
+    expect(out).not.toContain('alt="1000045235"');
+  });
+
+  it('emits alt="" when both inline and resolver alts are filename slugs', () => {
+    // The real-world case: editor inserts the digit filename as alt,
+    // DB originalName is the same string. Neither is semantic.
+    const out = rewriteImageTokens(`![1000045235](image:${UUID_A})`, (id) =>
+      id === UUID_A ? { url: 'https://cdn/a.jpg', alt: '1000045235.1600w.jpg' } : null,
+    );
+    expect(out).toContain('alt=""');
+    expect(out).not.toContain('alt="1000045235"');
+
+    const out2 = rewriteImageTokens(`![1000045235-1600w](image:${UUID_A})`, (id) =>
+      id === UUID_A ? { url: 'https://cdn/a.jpg' } : null,
+    );
+    expect(out2).toContain('alt=""');
   });
 });
 

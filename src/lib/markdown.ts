@@ -157,10 +157,17 @@ function escapeAttr(s: string): string {
  *  screen readers -- WCAG calls for empty alt on decorative images. */
 function isFilenameSlugAlt(alt: string): boolean {
   if (!alt) return false;
-  // Purely digits (any length).
-  if (/^\d+$/.test(alt)) return true;
-  // Common camera prefixes followed by digits/underscores/dashes.
-  if (/^(IMG|DSC|PXL|MVIMG|VID|PHOTO|P)[_-]?[\d_\-]+$/i.test(alt)) return true;
+  const trimmed = alt.trim();
+  // Long pure-digit runs (>=7 digits) look like phone-camera filenames
+  // (10-digit Pixel timestamps, 13-digit epoch ms, etc). Short digit
+  // strings like "2024" or counts get to pass through as author intent.
+  if (/^\d{7,}$/.test(trimmed)) return true;
+  // Filename-shaped: digits + the editor's width-suffix or other
+  // dot/dash/underscore decoration ("1000045235-1600w",
+  // "1000045235.1600w", "IMG_20240101"). Has to START with digits or a
+  // known camera prefix to qualify.
+  if (/^\d{4,}[._\-][\w._\-]+$/.test(trimmed)) return true;
+  if (/^(IMG|DSC|PXL|MVIMG|VID|PHOTO|P)[_-]?[\d_\-]+$/i.test(trimmed)) return true;
   return false;
 }
 
@@ -175,10 +182,11 @@ export function rewriteImageTokens(body: string, resolve: ImageResolver): string
   return body.replace(IMAGE_TOKEN_RE, (whole, alt: string, id: string) => {
     const resolved = resolve(id);
     if (!resolved) return whole;
-    // Inline alt (author intent) always wins. Otherwise fall back to the
-    // resolved alt -- but drop it if it looks like a phone-camera
-    // filename slug (no semantic value to screen readers).
-    let finalAlt = alt;
+    // Inline alt wins when it's meaningful. If both the inline alt and
+    // the resolved alt look like phone-camera filename slugs (the editor
+    // auto-fills the inline alt from the filename), drop to empty alt
+    // per WCAG "decorative image" semantics.
+    let finalAlt = isFilenameSlugAlt(alt) ? '' : alt;
     if (!finalAlt) {
       const candidate = resolved.alt ?? '';
       finalAlt = isFilenameSlugAlt(candidate) ? '' : candidate;
