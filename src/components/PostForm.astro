@@ -71,19 +71,10 @@ const initialBodyImages = initial.bodyImages ?? [];
       <button type="button" class="tab" data-tab="preview">preview</button>
     </div>
 
-    {/* Milkdown handles bold/italic/H2/H3/quote/list/link via its
-        slash menu + inline toolbar. We only keep the photo button
-        (which kicks off our compress + upload pipeline) plus the
-        write/preview tab switch. */}
-    <div class="toolbar" id="md-toolbar">
-      <span class="toolbar-spacer"></span>
-      <label class="toolbar-photo">
-        <span>📷 photo</span>
-        <input id="image-picker" type="file" accept="image/*" multiple style="display: none;" />
-      </label>
-    </div>
-
-    <div id="image-status" class="upload-status"></div>
+    {/* Milkdown's slash menu, drag/drop, and clipboard paste handle
+        image uploads. Formatting (bold / italic / headings / quotes /
+        lists / links) comes from its inline toolbar. No custom toolbar
+        bar of our own -- the editor surface is the toolbar. */}
 
     {/* Milkdown mounts onto this div. The textarea below stays in the
         form for back-compat with FormData and as a no-JS fallback;
@@ -146,25 +137,6 @@ const initialBodyImages = initial.bodyImages ?? [];
   .tab:last-child  { border-radius: 0 8px 8px 0; border-left: none; }
   .tab.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 
-  .toolbar {
-    display: flex; gap: 4px; flex-wrap: wrap; padding: 6px;
-    background: var(--bg-elev); border: 1px solid var(--border);
-    border-radius: 8px; margin-bottom: 6px; align-items: center;
-  }
-  .toolbar > button {
-    min-height: 36px; padding: 4px 10px; font-size: 13px;
-    border-radius: 6px; border: 1px solid transparent;
-  }
-  .toolbar > button:hover { border-color: var(--border); }
-  .toolbar-spacer { flex: 1; }
-  .toolbar-photo {
-    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
-    cursor: pointer; border-radius: 6px; min-height: 36px;
-    border: 1px solid var(--border); background: var(--bg-elev);
-    font-size: 13px;
-  }
-  .toolbar-photo:hover { background: #f0f0f0; }
-
   .milkdown-host {
     min-height: 360px;
     background: var(--bg-elev);
@@ -196,12 +168,21 @@ const initialBodyImages = initial.bodyImages ?? [];
     background: var(--bg-elev);
     border: 1px solid var(--border); border-radius: 8px;
     line-height: 1.6;
+    overflow-wrap: break-word;
   }
-  .preview-area img { max-width: 100%; height: auto; border-radius: 4px; }
-  .preview-area h2 { font-size: 22px; margin: 16px 0 8px; }
-  .preview-area h3 { font-size: 18px; margin: 14px 0 6px; }
-  .preview-area p  { margin: 8px 0; }
-  .preview-area blockquote {
+  /* The preview HTML is injected via innerHTML from the server-rendered
+     post body -- those elements don't carry Astro's data-astro-cid
+     scoping attribute, so child selectors have to be :global() to apply.
+     Without this the <picture>/<img> rendered by the markdown pipeline
+     ignored max-width and overflowed the page horizontally. */
+  .preview-area :global(picture),
+  .preview-area :global(img) {
+    max-width: 100%; height: auto; border-radius: 4px; display: block;
+  }
+  .preview-area :global(h2) { font-size: 22px; margin: 16px 0 8px; }
+  .preview-area :global(h3) { font-size: 18px; margin: 14px 0 6px; }
+  .preview-area :global(p)  { margin: 8px 0; }
+  .preview-area :global(blockquote) {
     margin: 8px 0; padding: 4px 12px; border-left: 3px solid var(--border);
     color: var(--muted);
   }
@@ -218,14 +199,11 @@ const initialBodyImages = initial.bodyImages ?? [];
   } from '../scripts/image-tokens';
 
   const form = document.getElementById('post-form') as HTMLFormElement;
-  const picker = document.getElementById('image-picker') as HTMLInputElement;
-  const status = document.getElementById('image-status') as HTMLElement;
   const body = document.getElementById('body-area') as HTMLTextAreaElement;
   const editorMount = document.getElementById('milkdown-editor') as HTMLElement;
   const previewArea = document.getElementById('preview-area') as HTMLElement;
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
   const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement | null;
-  const toolbar = document.getElementById('md-toolbar') as HTMLElement;
   const coverPicker = document.getElementById('cover-picker') as HTMLInputElement;
   const coverThumbWrap = document.getElementById('cover-thumb-wrap') as HTMLElement;
   const coverThumb = document.getElementById('cover-thumb') as HTMLImageElement;
@@ -354,38 +332,6 @@ const initialBodyImages = initial.bodyImages ?? [];
     return await r.json();
   }
 
-  // ─── body images (inserted into markdown via the editor) ───────────────
-  picker.addEventListener('change', async () => {
-    const files = Array.from(picker.files ?? []);
-    picker.value = '';
-    for (const file of files) {
-      status.textContent = `uploading ${file.name}…`;
-      const r = await compressAndUpload(file);
-      if (!r) { status.textContent = `upload failed: ${file.name}`; continue; }
-      // The editor renders the smaller variant (800w) for snappy loads
-      // while the public site still references the canonical /img/<key>
-      // via srcset fallback. Both URLs collapse to the same image:<uuid>
-      // token on save.
-      const renderUrl = r.editorUrl ?? r.url;
-      // Register the canonical first so the reverse map covers both, then
-      // the render URL last so the forward map (uuid -> URL) resolves to
-      // the smaller variant the editor displays.
-      if (renderUrl !== r.url) rememberImage(imageMap, { id: r.id, url: r.url });
-      rememberImage(imageMap, { id: r.id, url: renderUrl });
-      if (editor) {
-        // insertImageBlock builds a real image node in Milkdown so the
-        // image renders inline immediately (rather than as raw markdown
-        // text the user would have to nudge through an input rule).
-        editor.insertImageBlock(renderUrl);
-        body.value = collapseImageTokens(editor.getMarkdown(), imageMap);
-      } else {
-        // Editor not mounted yet; write the token form to the textarea.
-        body.value += `\n![](image:${r.id})\n`;
-      }
-      status.textContent = `inserted ${file.name}`;
-    }
-  });
-
   // ─── cover image ────────────────────────────────────────────────────────
   function setCover(id: string, url: string) {
     coverIdInput.value = id;
@@ -430,13 +376,11 @@ const initialBodyImages = initial.bodyImages ?? [];
     tabs.forEach((x) => x.classList.toggle('active', x === t));
     if (t.dataset.tab === 'preview') {
       editorMount.style.display = 'none';
-      toolbar.style.display = 'none';
       previewArea.style.display = '';
       await renderPreview();
     } else {
       previewArea.style.display = 'none';
       editorMount.style.display = '';
-      toolbar.style.display = '';
     }
   }));
 
