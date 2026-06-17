@@ -10,54 +10,42 @@ const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string }
 
 const all = await albums.listAlbumsWithImages(driver, { siteId: tenant.id });
 
-function thumbUrl(img: { r2Key: string; variantWidths: number[] | null }): string {
+function imgUrl(img: { r2Key: string; variantWidths: number[] | null }): string {
   const variants = img.variantWidths ?? [];
-  for (const w of [400, 800, 1200]) {
+  for (const w of [800, 1200, 400]) {
     if (variants.includes(w)) return publicUrlForKey(variantKeyForKey(img.r2Key, w), env_);
   }
   return publicUrlForKey(img.r2Key, env_);
 }
 
 function fmtDate(d: Date): string {
-  const mon = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-  return `${mon} · ${d.getFullYear()}`;
+  return `${d.getMonth() + 1} · ${d.getFullYear()}`;
 }
 ---
 <BaseLayout title="Gallery">
-  <div class="gallery-index">
+  <div class="gi">
     {all.length === 0 ? (
-      <p class="gallery-empty">No albums yet.</p>
-    ) : (
-      <div class="gallery-list">
-        {all.map((album) => (
-          <div class="gallery-entry">
-            <div class="gallery-entry-header">
-              <a href={`/gallery/${album.slug}`} class="gallery-entry-title">
-                {album.title}
-              </a>
-              <span class="gallery-entry-date">{fmtDate(album.createdAt)}</span>
-            </div>
-            {album.images.length > 0 && (
-              <div class="gallery-entry-thumbs">
-                {album.images.slice(0, 5).map((img) => (
-                  <a href={`/gallery/${album.slug}`} class="gallery-thumb">
-                    <img
-                      src={thumbUrl(img)}
-                      alt={img.caption ?? ''}
-                      loading="lazy"
-                    />
-                  </a>
-                ))}
-                {album.images.length > 5 && (
-                  <a href={`/gallery/${album.slug}`} class="gallery-thumb gallery-thumb-more">
-                    <span>+{album.images.length - 5}</span>
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+      <p class="gi-empty">No albums yet.</p>
+    ) : all.map((album) => (
+      <div class="gi-album">
+        <div class="gi-row">
+          <a href={`/gallery/${album.slug}`} class="gi-title">{album.title}</a>
+          <span class="gi-date">{fmtDate(album.createdAt)}</span>
+        </div>
+        {album.images.length > 0 && (
+          <a href={`/gallery/${album.slug}`} class="gi-masonry" aria-label={`View ${album.title}`}>
+            {album.images.map((img) => (
+              <img
+                src={imgUrl(img)}
+                alt={img.caption ?? ''}
+                loading="lazy"
+                width={img.width}
+                height={img.height}
+              />
+            ))}
+          </a>
+        )}
       </div>
-    )}
+    ))}
   </div>
 </BaseLayout>
