@@ -19,56 +19,64 @@ interface Props {
 }
 
 const { mode, siteId, album, initialImages = [] } = Astro.props;
+const photoCount = initialImages.length;
 ---
 <AdminLayout bare>
-  <div class="album-editor">
-    <!-- Header bar -->
-    <div class="editor-header">
-      <a href="/admin/gallery" class="back-link">← Albums</a>
-      <span class="editor-title">{mode === 'new' ? 'New album' : 'Edit album'}</span>
-      <div style="display: flex; gap: 8px;">
+  <div class="ae">
+    <!-- Sticky header -->
+    <div class="ae-header">
+      <a href="/admin/gallery" class="ae-back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+        <span>Albums</span>
+      </a>
+      <span class="ae-title">{mode === 'new' ? 'New album' : 'Edit album'}</span>
+      <div class="ae-actions">
         {mode === 'edit' && (
-          <button type="button" id="btn-delete" class="danger">Delete</button>
+          <button type="button" id="btn-delete" class="ae-btn ae-btn--danger" aria-label="Delete album">Delete</button>
         )}
-        <button type="button" id="btn-save" class="primary">Save</button>
+        <button type="button" id="btn-save" class="ae-btn ae-btn--primary" aria-label="Save album">Save</button>
       </div>
     </div>
 
-    <!-- Form fields -->
-    <div class="editor-body">
-      <div class="field">
-        <label for="f-title">Title</label>
-        <input id="f-title" type="text" placeholder="Album title" value={album?.title ?? ''} autocomplete="off" />
+    <!-- Body -->
+    <div class="ae-body">
+      <div class="ae-field">
+        <label for="f-title" class="ae-label">Title</label>
+        <input id="f-title" class="ae-input" type="text" placeholder="Album title" value={album?.title ?? ''} autocomplete="off" />
       </div>
-      <div class="field">
-        <label for="f-slug">Slug</label>
-        <input id="f-slug" type="text" placeholder="album-slug" value={album?.slug ?? ''} autocomplete="off" />
+
+      <div class="ae-field">
+        <label for="f-slug" class="ae-label">Slug</label>
+        <input id="f-slug" class="ae-input" type="text" placeholder="album-slug" value={album?.slug ?? ''} autocomplete="off" />
       </div>
-      <div class="field">
-        <label for="f-desc">Description</label>
-        <textarea id="f-desc" rows="3" placeholder="Optional description">{album?.description ?? ''}</textarea>
+
+      <div class="ae-field">
+        <label for="f-desc" class="ae-label">Description</label>
+        <textarea id="f-desc" class="ae-input ae-textarea" rows="3" placeholder="Optional description">{album?.description ?? ''}</textarea>
       </div>
-      <div class="field-inline">
+
+      <div class="ae-field-check">
         <input id="f-published" type="checkbox" checked={album?.published ?? true} />
         <label for="f-published">Published</label>
       </div>
 
-      <!-- Image upload area -->
-      <div class="field">
-        <label>Photos</label>
-        <div id="upload-area" class="upload-area">
-          <input id="f-images" type="file" accept="image/*" multiple style="display:none" />
-          <button type="button" id="btn-add-images" class="upload-btn">+ Add photos</button>
-          <span id="upload-status" class="upload-status"></span>
-        </div>
-        <div id="image-grid" class="image-grid">
-          <!-- thumbnails injected by JS -->
-        </div>
+      <!-- Photos section -->
+      <div class="ae-photos-header">
+        <span class="ae-label" id="photos-count-label">Photos{photoCount > 0 ? ` · ${photoCount}` : ''}</span>
+        <button type="button" id="btn-add-images" class="ae-btn ae-btn--add" aria-label="Add photos">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Add photos
+        </button>
+      </div>
+      <input id="f-images" type="file" accept="image/*" multiple style="display:none" />
+      <span id="upload-status" class="ae-upload-status" aria-live="polite"></span>
+
+      <div id="image-grid" class="ae-grid">
+        <!-- thumbnails injected by JS -->
       </div>
     </div>
   </div>
 
-  <!-- Pass server data to client script -->
   <script
     id="album-data"
     type="application/json"
@@ -84,7 +92,6 @@ const { mode, siteId, album, initialImages = [] } = Astro.props;
 <script>
 import { slugify } from '~/lib/slug';
 
-// --- State ---
 const dataEl = document.getElementById('album-data') as HTMLScriptElement;
 const { mode, siteId, albumId, initialImages } = JSON.parse(dataEl.textContent!);
 
@@ -95,14 +102,14 @@ type UploadedImage = {
   height: number;
 };
 
-// Initialize from existing images
 const images: UploadedImage[] = initialImages.map((img: any) => {
   const w = (img.variantWidths ?? []).includes(400) ? 400 : (img.variantWidths?.[0] ?? null);
-  const previewUrl = w ? `/img/${img.r2Key.replace(/\.(jpe?g|png|webp|gif)$/i, '')}.${w}w.jpg` : `/img/${img.r2Key}`;
+  const previewUrl = w
+    ? `/img/${img.r2Key.replace(/\.(jpe?g|png|webp|gif)$/i, '')}.${w}w.jpg`
+    : `/img/${img.r2Key}`;
   return { imageId: img.imageId, previewUrl, width: img.width, height: img.height };
 });
 
-// --- DOM refs ---
 const titleInput = document.getElementById('f-title') as HTMLInputElement;
 const slugInput = document.getElementById('f-slug') as HTMLInputElement;
 const descInput = document.getElementById('f-desc') as HTMLTextAreaElement;
@@ -111,10 +118,10 @@ const fileInput = document.getElementById('f-images') as HTMLInputElement;
 const btnAddImages = document.getElementById('btn-add-images') as HTMLButtonElement;
 const uploadStatus = document.getElementById('upload-status') as HTMLSpanElement;
 const imageGrid = document.getElementById('image-grid') as HTMLDivElement;
+const photosLabel = document.getElementById('photos-count-label') as HTMLSpanElement;
 const btnSave = document.getElementById('btn-save') as HTMLButtonElement;
 const btnDelete = document.getElementById('btn-delete') as HTMLButtonElement | null;
 
-// Auto-derive slug from title (only if slug is empty or matches prior auto-slug)
 let lastAutoSlug = slugify(titleInput.value);
 titleInput.addEventListener('input', () => {
   const auto = slugify(titleInput.value);
@@ -124,29 +131,32 @@ titleInput.addEventListener('input', () => {
   }
 });
 
-// Render image grid
+function updatePhotosLabel() {
+  photosLabel.textContent = images.length > 0 ? `Photos · ${images.length}` : 'Photos';
+}
+
 function renderGrid() {
   imageGrid.innerHTML = '';
   images.forEach((img, i) => {
     const cell = document.createElement('div');
-    cell.className = 'image-thumb';
+    cell.className = 'ae-thumb';
     cell.innerHTML = `
-      <img src="${img.previewUrl}" alt="" />
-      <button class="remove-btn" data-index="${i}" type="button">×</button>
+      <img src="${img.previewUrl}" alt="" loading="lazy" />
+      <button class="ae-thumb-remove" data-index="${i}" type="button" aria-label="Remove photo">×</button>
     `;
-    cell.querySelector<HTMLButtonElement>('.remove-btn')!.addEventListener('click', () => {
+    cell.querySelector<HTMLButtonElement>('.ae-thumb-remove')!.addEventListener('click', () => {
       images.splice(i, 1);
       renderGrid();
+      updatePhotosLabel();
     });
     imageGrid.appendChild(cell);
   });
+  updatePhotosLabel();
 }
 renderGrid();
 
-// File input trigger
 btnAddImages.addEventListener('click', () => fileInput.click());
 
-// Client-side compress + multi-variant upload (mirrors PostForm's approach).
 const VARIANT_TARGETS = [400, 800, 1200, 1600, 2400];
 
 async function resizeAt(
@@ -188,7 +198,6 @@ async function compressAndUpload(file: File): Promise<{ id: string; url: string;
   return resp.json();
 }
 
-// Upload files
 fileInput.addEventListener('change', async () => {
   const files = Array.from(fileInput.files ?? []);
   if (!files.length) return;
@@ -211,7 +220,6 @@ fileInput.addEventListener('change', async () => {
   uploadStatus.textContent = '';
 });
 
-// Save
 btnSave.addEventListener('click', async () => {
   const title = titleInput.value.trim();
   if (!title) { alert('Title is required'); return; }
@@ -246,7 +254,6 @@ btnSave.addEventListener('click', async () => {
   }
 });
 
-// Delete
 btnDelete?.addEventListener('click', async () => {
   if (!confirm('Delete this album? This cannot be undone.')) return;
   btnDelete.disabled = true;
@@ -266,111 +273,254 @@ btnDelete?.addEventListener('click', async () => {
 </script>
 
 <style>
-.album-editor {
+/* ── Layout shell ────────────────────────────────────────────────────────── */
+.ae {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
 }
-.editor-header {
+
+/* ── Sticky header ────────────────────────────────────────────────────────── */
+.ae-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: calc(var(--safe-top, 0px) + 12px) 16px 12px;
+  padding: calc(var(--safe-top, 0px) + 14px) 20px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elev);
   position: sticky;
   top: 0;
   z-index: 10;
 }
-.back-link {
-  font-size: 14px;
+
+.ae-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
   color: var(--muted);
   white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 150ms ease;
+
+  &:hover { color: var(--text); }
+
+  svg { flex-shrink: 0; }
 }
-.editor-title {
-  font-size: 15px;
+
+.ae-title {
+  font-size: 14px;
   font-weight: 600;
   flex: 1;
   text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.editor-body {
-  padding: 16px;
-  max-width: 720px;
+
+.ae-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.ae-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: opacity 150ms ease, background 150ms ease;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.ae-btn--primary {
+  background: var(--text, #0f0f0f);
+  color: var(--bg, #fff);
+  border-color: var(--text, #0f0f0f);
+
+  &:hover:not(:disabled) { opacity: 0.8; }
+}
+
+.ae-btn--danger {
+  background: transparent;
+  color: #d94f4f;
+  border-color: #d94f4f;
+
+  &:hover:not(:disabled) { background: #fdf0f0; }
+}
+
+.ae-btn--add {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+
+  &:hover:not(:disabled) { background: var(--bg-sunken); }
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+.ae-body {
+  padding: 24px 20px 60px;
+  max-width: 680px;
   margin: 0 auto;
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
-.field {
+
+/* ── Labels ──────────────────────────────────────────────────────────────── */
+.ae-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+/* ── Fields ──────────────────────────────────────────────────────────────── */
+.ae-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
 }
-.field label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-}
-.field-inline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.field-inline input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-}
-.upload-area {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.upload-btn {
-  min-height: 36px;
-  padding: 6px 14px;
+
+.ae-input {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
   font-size: 14px;
+  font-family: inherit;
+  line-height: 1.5;
+  transition: border-color 150ms ease;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: var(--text);
+  }
+
+  &::placeholder { color: var(--muted); opacity: 0.6; }
 }
-.upload-status {
-  font-size: 13px;
-  color: var(--muted);
+
+.ae-textarea {
+  resize: vertical;
+  min-height: 80px;
 }
-.image-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+
+.ae-field-check {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  margin-top: 10px;
+
+  input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+
+  label {
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+  }
 }
-.image-thumb {
+
+/* ── Photos section ──────────────────────────────────────────────────────── */
+.ae-photos-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  .ae-label { margin-bottom: 0; }
+}
+
+.ae-upload-status {
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 1em;
+}
+
+/* ── Photo grid ──────────────────────────────────────────────────────────── */
+.ae-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.ae-thumb {
   position: relative;
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: 6px;
   background: var(--bg-sunken);
 }
-.image-thumb img {
+
+.ae-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
-.remove-btn {
+
+.ae-thumb-remove {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  min-height: 0;
-  width: 22px;
-  height: 22px;
+  top: 5px;
+  right: 5px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.6);
-  color: #fff;
   border: none;
-  font-size: 14px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 150ms ease;
+
+  &:hover { background: rgba(0, 0, 0, 0.85); }
+}
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .ae-header {
+    padding: calc(var(--safe-top, 0px) + 12px) 14px 12px;
+    gap: 8px;
+  }
+
+  .ae-back span { display: none; }
+
+  .ae-body {
+    padding: 18px 14px 60px;
+    gap: 16px;
+  }
+
+  .ae-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
 }
 </style>

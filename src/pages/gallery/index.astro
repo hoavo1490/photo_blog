@@ -12,50 +12,52 @@ const all = await albums.listAlbumsWithImages(driver, { siteId: tenant.id });
 
 function thumbUrl(img: { r2Key: string; variantWidths: number[] | null }): string {
   const variants = img.variantWidths ?? [];
-  for (const w of [800, 400, 1200, 1600]) {
+  for (const w of [400, 800, 1200]) {
     if (variants.includes(w)) return publicUrlForKey(variantKeyForKey(img.r2Key, w), env_);
   }
   return publicUrlForKey(img.r2Key, env_);
 }
+
+function fmtDate(d: Date): string {
+  const mon = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+  return `${mon} · ${d.getFullYear()}`;
+}
 ---
 <BaseLayout title="Gallery">
-  <div id="foto-gallery">
+  <div class="gallery-index">
     {all.length === 0 ? (
-      <p style="color: #999; text-align: center; padding: 60px 0 4em;">No albums yet.</p>
-    ) : all.map(album => (
-      <div class="foto-section" id={album.slug}>
-        <div class="foto-section-header">
-          <div class="foto-section-title">{album.title}</div>
-          {album.description && <div class="foto-section-description">{album.description}</div>}
-        </div>
-        {album.images.length > 0 && (
-          <div class={`section-images section-images-${album.slug}`}>
-            {album.images.map(img => (
-              <div style={`width: ${img.width}px; height: ${img.height}px`}>
-                <a
-                  href={publicUrlForKey(img.r2Key, env_)}
-                  data-pswp-src={publicUrlForKey(img.r2Key, env_)}
-                  data-pswp-width={img.width}
-                  data-pswp-height={img.height}
-                >
-                  <img
-                    src={thumbUrl(img)}
-                    alt={img.caption ?? ''}
-                    loading="lazy"
-                    style="width: 100%; height: 100%; object-fit: cover; display: block;"
-                  />
-                </a>
+      <p class="gallery-empty">No albums yet.</p>
+    ) : (
+      <div class="gallery-list">
+        {all.map((album) => (
+          <div class="gallery-entry">
+            <div class="gallery-entry-header">
+              <a href={`/gallery/${album.slug}`} class="gallery-entry-title">
+                {album.title}
+              </a>
+              <span class="gallery-entry-date">{fmtDate(album.createdAt)}</span>
+            </div>
+            {album.images.length > 0 && (
+              <div class="gallery-entry-thumbs">
+                {album.images.slice(0, 5).map((img) => (
+                  <a href={`/gallery/${album.slug}`} class="gallery-thumb">
+                    <img
+                      src={thumbUrl(img)}
+                      alt={img.caption ?? ''}
+                      loading="lazy"
+                    />
+                  </a>
+                ))}
+                {album.images.length > 5 && (
+                  <a href={`/gallery/${album.slug}`} class="gallery-thumb gallery-thumb-more">
+                    <span>+{album.images.length - 5}</span>
+                  </a>
+                )}
               </div>
-            ))}
+            )}
           </div>
-        )}
+        ))}
       </div>
-    ))}
+    )}
   </div>
 </BaseLayout>
-
-<script>
-import { initGallery } from '~/scripts/gallery-lightbox';
-initGallery();
-document.addEventListener('astro:page-load', initGallery);
-</script>
