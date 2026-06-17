@@ -1,0 +1,44 @@
+---
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import * as albums from '~/lib/db/albums';
+import type { SqlDriver } from '~/lib/db/driver';
+
+const session = Astro.locals.session;
+if (!session) return Astro.redirect('/login');
+const driver = Astro.locals.db! as SqlDriver;
+
+const sites = await driver.query<{ id: string; slug: string; name: string }>(
+  `SELECT s.id, s.slug, s.name FROM sites s JOIN site_members m ON m.site_id = s.id WHERE m.user_id = $1 ORDER BY m.added_at ASC`,
+  [session.userId],
+);
+const siteId = sites[0]?.id;
+
+const allAlbums = siteId ? await albums.listAllAlbums(driver, { siteId }) : [];
+---
+<AdminLayout title="gallery">
+  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px;">
+    <h2 style="font-size: 18px; font-weight: 600;">{allAlbums.length} albums</h2>
+    <div style="display: flex; gap: 12px;">
+      <a href="/admin" style="min-height: 44px; padding: 10px 16px; color: var(--fg); border: 1px solid var(--border-strong); border-radius: 999px; display: inline-flex; align-items: center; font-size: 14px;">← Posts</a>
+      <a href="/admin/gallery/new" class="primary" role="button" style="min-height: 44px; padding: 10px 16px; background: var(--accent); color: var(--accent-fg); border-radius: 999px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600;">+ new album</a>
+    </div>
+  </div>
+
+  {allAlbums.length === 0 ? (
+    <p style="color: var(--muted); padding: 40px 0; text-align: center;">No albums yet.</p>
+  ) : (
+    <ul style="list-style: none; padding: 0;">
+      {allAlbums.map(album => (
+        <li>
+          <a href={`/admin/gallery/edit/${album.id}`} style="display: block; padding: 14px 0; border-bottom: 1px solid var(--border);">
+            <div style="font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace;">
+              {album.published ? 'published' : 'draft'} · {album.createdAt.toISOString().slice(0, 10)}
+            </div>
+            <div style="font-size: 16px; margin-top: 2px;">{album.title}</div>
+            {album.description && <div style="font-size: 13px; color: var(--muted); margin-top: 2px;">{album.description}</div>}
+          </a>
+        </li>
+      ))}
+    </ul>
+  )}
+</AdminLayout>

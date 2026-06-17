@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import { createNeonDriver } from './lib/db/neon-driver';
 import { classifyRoute, isCacheableMethod } from './lib/middleware/route-mode';
 import { resolveTenant, historicRedirectUrl } from './lib/middleware/tenant';
+import { findBySlug } from './lib/db/sites';
 import { readFromCache, writeToCache } from './lib/middleware/cache';
 import { readSessionId, looksLikeSessionId } from './lib/auth/session-cookie';
 import { loadSession } from './lib/auth/login-flow';
@@ -46,7 +47,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Resolve tenant for both branches -- admin mutations are scoped to
   // whichever site owns the host the request landed on, and public reads
   // need the tenant to look up posts.
-  const resolved = await resolveTenant(driver, host);
+  let resolved = await resolveTenant(driver, host);
+  if (resolved.kind === 'unknown') {
+    // Dev fallback: LOCAL_SITE_SLUG in .dev.vars lets localhost resolve to a site.
+    const localSlug = (env as unknown as { LOCAL_SITE_SLUG?: string }).LOCAL_SITE_SLUG;
+    if (localSlug) {
+      const site = await findBySlug(driver, localSlug);
+      if (site) resolved = { kind: 'current', site: { ...site, isCurrentHost: true } };
+    }
+  }
   if (resolved.kind === 'unknown') {
     return new Response('Site not found', { status: 404 });
   }

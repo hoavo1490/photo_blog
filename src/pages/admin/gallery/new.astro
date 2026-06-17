@@ -1,0 +1,17 @@
+---
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import AlbumForm from '~/components/AlbumForm.astro';
+import type { SqlDriver } from '~/lib/db/driver';
+
+const session = Astro.locals.session;
+if (!session) return Astro.redirect('/login');
+const driver = Astro.locals.db! as SqlDriver;
+
+const sites = await driver.query<{ id: string }>(
+  `SELECT s.id FROM sites s JOIN site_members m ON m.site_id = s.id WHERE m.user_id = $1 ORDER BY m.added_at ASC LIMIT 1`,
+  [session.userId],
+);
+const siteId = sites[0]?.id;
+if (!siteId) return Astro.redirect('/admin');
+---
+<AlbumForm mode="new" siteId={siteId} />

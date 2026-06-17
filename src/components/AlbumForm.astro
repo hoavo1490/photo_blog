@@ -1,0 +1,376 @@
+---
+import AdminLayout from '~/layouts/AdminLayout.astro';
+import type { Album } from '~/lib/db/albums';
+
+interface InitialImage {
+  imageId: string;
+  r2Key: string;
+  width: number;
+  height: number;
+  variantWidths: number[] | null;
+  caption: string | null;
+}
+
+interface Props {
+  mode: 'new' | 'edit';
+  siteId: string;
+  album?: Album;
+  initialImages?: InitialImage[];
+}
+
+const { mode, siteId, album, initialImages = [] } = Astro.props;
+---
+<AdminLayout bare>
+  <div class="album-editor">
+    <!-- Header bar -->
+    <div class="editor-header">
+      <a href="/admin/gallery" class="back-link">← Albums</a>
+      <span class="editor-title">{mode === 'new' ? 'New album' : 'Edit album'}</span>
+      <div style="display: flex; gap: 8px;">
+        {mode === 'edit' && (
+          <button type="button" id="btn-delete" class="danger">Delete</button>
+        )}
+        <button type="button" id="btn-save" class="primary">Save</button>
+      </div>
+    </div>
+
+    <!-- Form fields -->
+    <div class="editor-body">
+      <div class="field">
+        <label for="f-title">Title</label>
+        <input id="f-title" type="text" placeholder="Album title" value={album?.title ?? ''} autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="f-slug">Slug</label>
+        <input id="f-slug" type="text" placeholder="album-slug" value={album?.slug ?? ''} autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="f-desc">Description</label>
+        <textarea id="f-desc" rows="3" placeholder="Optional description">{album?.description ?? ''}</textarea>
+      </div>
+      <div class="field-inline">
+        <input id="f-published" type="checkbox" checked={album?.published ?? true} />
+        <label for="f-published">Published</label>
+      </div>
+
+      <!-- Image upload area -->
+      <div class="field">
+        <label>Photos</label>
+        <div id="upload-area" class="upload-area">
+          <input id="f-images" type="file" accept="image/*" multiple style="display:none" />
+          <button type="button" id="btn-add-images" class="upload-btn">+ Add photos</button>
+          <span id="upload-status" class="upload-status"></span>
+        </div>
+        <div id="image-grid" class="image-grid">
+          <!-- thumbnails injected by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pass server data to client script -->
+  <script
+    id="album-data"
+    type="application/json"
+    set:html={JSON.stringify({
+      mode,
+      siteId,
+      albumId: album?.id ?? null,
+      initialImages,
+    })}
+  />
+</AdminLayout>
+
+<script>
+import { slugify } from '~/lib/slug';
+
+// --- State ---
+const dataEl = document.getElementById('album-data') as HTMLScriptElement;
+const { mode, siteId, albumId, initialImages } = JSON.parse(dataEl.textContent!);
+
+type UploadedImage = {
+  imageId: string;
+  previewUrl: string;
+  width: number;
+  height: number;
+};
+
+// Initialize from existing images
+const images: UploadedImage[] = initialImages.map((img: any) => {
+  const w = (img.variantWidths ?? []).includes(400) ? 400 : (img.variantWidths?.[0] ?? null);
+  const previewUrl = w ? `/img/${img.r2Key.replace(/\.(jpe?g|png|webp|gif)$/i, '')}.${w}w.jpg` : `/img/${img.r2Key}`;
+  return { imageId: img.imageId, previewUrl, width: img.width, height: img.height };
+});
+
+// --- DOM refs ---
+const titleInput = document.getElementById('f-title') as HTMLInputElement;
+const slugInput = document.getElementById('f-slug') as HTMLInputElement;
+const descInput = document.getElementById('f-desc') as HTMLTextAreaElement;
+const publishedInput = document.getElementById('f-published') as HTMLInputElement;
+const fileInput = document.getElementById('f-images') as HTMLInputElement;
+const btnAddImages = document.getElementById('btn-add-images') as HTMLButtonElement;
+const uploadStatus = document.getElementById('upload-status') as HTMLSpanElement;
+const imageGrid = document.getElementById('image-grid') as HTMLDivElement;
+const btnSave = document.getElementById('btn-save') as HTMLButtonElement;
+const btnDelete = document.getElementById('btn-delete') as HTMLButtonElement | null;
+
+// Auto-derive slug from title (only if slug is empty or matches prior auto-slug)
+let lastAutoSlug = slugify(titleInput.value);
+titleInput.addEventListener('input', () => {
+  const auto = slugify(titleInput.value);
+  if (slugInput.value === '' || slugInput.value === lastAutoSlug) {
+    slugInput.value = auto;
+    lastAutoSlug = auto;
+  }
+});
+
+// Render image grid
+function renderGrid() {
+  imageGrid.innerHTML = '';
+  images.forEach((img, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'image-thumb';
+    cell.innerHTML = `
+      <img src="${img.previewUrl}" alt="" />
+      <button class="remove-btn" data-index="${i}" type="button">×</button>
+    `;
+    cell.querySelector<HTMLButtonElement>('.remove-btn')!.addEventListener('click', () => {
+      images.splice(i, 1);
+      renderGrid();
+    });
+    imageGrid.appendChild(cell);
+  });
+}
+renderGrid();
+
+// File input trigger
+btnAddImages.addEventListener('click', () => fileInput.click());
+
+// Client-side compress + multi-variant upload (mirrors PostForm's approach).
+const VARIANT_TARGETS = [400, 800, 1200, 1600, 2400];
+
+async function resizeAt(
+  bitmap: ImageBitmap,
+  targetWidth: number,
+  type: string,
+  quality = 0.80,
+): Promise<{ blob: Blob; width: number; height: number } | null> {
+  const ratio = Math.min(1, targetWidth / bitmap.width);
+  const w = Math.round(bitmap.width * ratio);
+  const h = Math.round(bitmap.height * ratio);
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
+  const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, type, quality));
+  return blob ? { blob, width: w, height: h } : null;
+}
+
+async function compressAndUpload(file: File): Promise<{ id: string; url: string; editorUrl: string; variantWidths: number[] } | null> {
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const wantWidths = VARIANT_TARGETS.filter((w) => w <= bitmap.width);
+  if (wantWidths.length === 0) wantWidths.push(bitmap.width);
+  const [jpegResults, webpResults] = await Promise.all([
+    Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/jpeg', 0.80))),
+    Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/webp', 0.80))),
+  ]);
+  const jpegs = jpegResults.filter((r): r is NonNullable<typeof r> => r !== null);
+  if (jpegs.length === 0) return null;
+  const webps = webpResults.filter((r): r is NonNullable<typeof r> => r !== null);
+  jpegs.sort((a, b) => b.width - a.width);
+  webps.sort((a, b) => b.width - a.width);
+  const stem = file.name.replace(/\.[^.]+$/, '');
+  const fd = new FormData();
+  fd.append('siteId', siteId);
+  for (const v of jpegs) fd.append(`file_${v.width}`, v.blob, `${stem}.${v.width}w.jpg`);
+  for (const v of webps) fd.append(`file_${v.width}_webp`, v.blob, `${stem}.${v.width}w.webp`);
+  const resp = await fetch('/admin/api/upload', { method: 'POST', body: fd });
+  if (!resp.ok) return null;
+  return resp.json();
+}
+
+// Upload files
+fileInput.addEventListener('change', async () => {
+  const files = Array.from(fileInput.files ?? []);
+  if (!files.length) return;
+  fileInput.value = '';
+
+  for (const file of files) {
+    uploadStatus.textContent = `Uploading ${file.name}…`;
+    btnSave.disabled = true;
+    try {
+      const data = await compressAndUpload(file);
+      if (!data) throw new Error('compression or upload failed');
+      images.push({ imageId: data.id, previewUrl: data.editorUrl, width: 0, height: 0 });
+      renderGrid();
+    } catch (e) {
+      uploadStatus.textContent = `Upload failed: ${(e as Error).message}`;
+    } finally {
+      btnSave.disabled = false;
+    }
+  }
+  uploadStatus.textContent = '';
+});
+
+// Save
+btnSave.addEventListener('click', async () => {
+  const title = titleInput.value.trim();
+  if (!title) { alert('Title is required'); return; }
+  const slug = slugInput.value.trim() || slugify(title);
+  if (!slug) { alert('Could not derive slug'); return; }
+
+  btnSave.disabled = true;
+  btnSave.textContent = 'Saving…';
+  try {
+    const body = {
+      mode,
+      albumId,
+      siteId,
+      title,
+      slug,
+      description: descInput.value.trim() || null,
+      published: publishedInput.checked,
+      imageIds: images.map(img => img.imageId),
+    };
+    const resp = await fetch('/admin/api/gallery-save', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json() as { id: string; slug: string };
+    window.location.href = `/admin/gallery/edit/${data.id}`;
+  } catch (e) {
+    alert(`Save failed: ${(e as Error).message}`);
+    btnSave.disabled = false;
+    btnSave.textContent = 'Save';
+  }
+});
+
+// Delete
+btnDelete?.addEventListener('click', async () => {
+  if (!confirm('Delete this album? This cannot be undone.')) return;
+  btnDelete.disabled = true;
+  try {
+    const resp = await fetch('/admin/api/gallery-delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ albumId, siteId }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    window.location.href = '/admin/gallery';
+  } catch (e) {
+    alert(`Delete failed: ${(e as Error).message}`);
+    btnDelete.disabled = false;
+  }
+});
+</script>
+
+<style>
+.album-editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(var(--safe-top, 0px) + 12px) 16px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.back-link {
+  font-size: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.editor-title {
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+  text-align: center;
+}
+.editor-body {
+  padding: 16px;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.field-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.field-inline input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+.upload-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.upload-btn {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 14px;
+}
+.upload-status {
+  font-size: 13px;
+  color: var(--muted);
+}
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.image-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--bg-sunken);
+}
+.image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.remove-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-height: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  border: none;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+</style>

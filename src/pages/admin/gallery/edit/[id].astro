@@ -1,0 +1,43 @@
+---
+import AlbumForm from '~/components/AlbumForm.astro';
+import * as albums from '~/lib/db/albums';
+import type { SqlDriver } from '~/lib/db/driver';
+
+const session = Astro.locals.session;
+if (!session) return Astro.redirect('/login');
+const driver = Astro.locals.db! as SqlDriver;
+
+const { id } = Astro.params;
+
+const sites = await driver.query<{ id: string }>(
+  `SELECT s.id FROM sites s JOIN site_members m ON m.site_id = s.id WHERE m.user_id = $1 ORDER BY m.added_at ASC LIMIT 1`,
+  [session.userId],
+);
+const siteId = sites[0]?.id;
+if (!siteId) return Astro.redirect('/admin');
+
+const album = await albums.findAlbumById(driver, { siteId, id: id! });
+if (!album) return Astro.redirect('/admin/gallery');
+
+// Load current album images for prefill
+const albumImages = await driver.query<{ image_id: string; r2_key: string; width: number; height: number; variant_widths: number[] | null; sort_order: number; caption: string | null }>(
+  `SELECT ai.image_id, ai.sort_order, ai.caption, i.r2_key, i.width, i.height, i.variant_widths
+   FROM album_images ai JOIN images i ON i.id = ai.image_id
+   WHERE ai.album_id = $1
+   ORDER BY ai.sort_order ASC, ai.created_at ASC`,
+  [album.id],
+);
+---
+<AlbumForm
+  mode="edit"
+  siteId={siteId}
+  album={album}
+  initialImages={albumImages.map(r => ({
+    imageId: r.image_id,
+    r2Key: r.r2_key,
+    width: r.width,
+    height: r.height,
+    variantWidths: r.variant_widths,
+    caption: r.caption,
+  }))}
+/>

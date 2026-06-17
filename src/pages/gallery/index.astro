@@ -1,0 +1,79 @@
+---
+import { env } from 'cloudflare:workers';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import AlbumCard from '~/components/AlbumCard.astro';
+import * as albums from '~/lib/db/albums';
+import { variantKeyForKey, publicUrlForKey } from '~/lib/r2/images';
+
+const tenant = Astro.locals.tenant!;
+const driver = Astro.locals.db!;
+const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string };
+
+const all = await albums.listAlbums(driver, { siteId: tenant.id });
+
+// For cover images, we need to know r2_key. Use a DB query to get it.
+// Query images table for all cover_image_id values.
+const coverImageIds = all.map(a => a.coverImageId).filter(Boolean) as string[];
+const coverImages = coverImageIds.length > 0
+  ? await driver.query<{ id: string; r2_key: string; variant_widths: number[] | null }>(
+      `SELECT id, r2_key, variant_widths FROM images WHERE id = ANY($1::uuid[])`,
+      [coverImageIds],
+    )
+  : [];
+const coverByImageId = new Map(coverImages.map(img => [img.id, img]));
+
+type AlbumWithCover = {
+  album: (typeof all)[number];
+  coverUrl: string | null;
+};
+const items: AlbumWithCover[] = all.map(album => {
+  let coverUrl: string | null = null;
+  if (album.coverImageId) {
+    const img = coverByImageId.get(album.coverImageId);
+    if (img) {
+      const variants = img.variant_widths ?? [];
+      const w = variants.includes(400) ? 400 : (variants[0] ?? null);
+      coverUrl = w ? publicUrlForKey(variantKeyForKey(img.r2_key, w), env_) : publicUrlForKey(img.r2_key, env_);
+    }
+  }
+  return { album, coverUrl };
+});
+---
+<BaseLayout title="Gallery">
+  <div class="gallery-wrap">
+    <div class="gallery-header">
+      <h1 class="gallery-page-title">Gallery</h1>
+    </div>
+    {items.length === 0 ? (
+      <p style="color: #999; text-align: center; padding: 60px 0;">No albums yet.</p>
+    ) : (
+      <div class="album-grid">
+        {items.map(({ album, coverUrl }) => (
+          <AlbumCard album={album} coverUrl={coverUrl} />
+        ))}
+      </div>
+    )}
+  </div>
+</BaseLayout>
+
+<style>
+.gallery-wrap {
+  margin: 0 auto;
+  max-width: 750px;
+  padding: 0 12px;
+}
+.gallery-header {
+  margin: 2em 0 1.5em;
+}
+.gallery-page-title {
+  font-size: 1.4em;
+  font-weight: 700;
+  color: #333;
+}
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  padding-bottom: 4em;
+}
+</style>
