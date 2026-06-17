@@ -10,9 +10,17 @@ const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string }
 
 const all = await albums.listAlbumsWithImages(driver, { siteId: tenant.id });
 
-function imgUrl(img: { r2Key: string; variantWidths: number[] | null }): string {
+function thumbUrl(img: { r2Key: string; variantWidths: number[] | null }): string {
   const variants = img.variantWidths ?? [];
   for (const w of [800, 1200, 400]) {
+    if (variants.includes(w)) return publicUrlForKey(variantKeyForKey(img.r2Key, w), env_);
+  }
+  return publicUrlForKey(img.r2Key, env_);
+}
+
+function fullUrl(img: { r2Key: string; variantWidths: number[] | null }): string {
+  const variants = img.variantWidths ?? [];
+  for (const w of [1600, 1200, 800]) {
     if (variants.includes(w)) return publicUrlForKey(variantKeyForKey(img.r2Key, w), env_);
   }
   return publicUrlForKey(img.r2Key, env_);
@@ -29,23 +37,55 @@ function fmtDate(d: Date): string {
     ) : all.map((album) => (
       <div class="gi-album">
         <div class="gi-row">
-          <a href={`/gallery/${album.slug}`} class="gi-title">{album.title}</a>
+          <span class="gi-title">{album.title}</span>
           <span class="gi-date">{fmtDate(album.createdAt)}</span>
         </div>
         {album.images.length > 0 && (
-          <a href={`/gallery/${album.slug}`} class="gi-masonry" aria-label={`View ${album.title}`}>
+          <div class="gi-masonry">
             {album.images.map((img) => (
-              <img
-                src={imgUrl(img)}
-                alt={img.caption ?? ''}
-                loading="lazy"
-                width={img.width}
-                height={img.height}
-              />
+              <a
+                href={fullUrl(img)}
+                data-pswp-src={fullUrl(img)}
+                data-pswp-width={img.width}
+                data-pswp-height={img.height}
+              >
+                <img
+                  src={thumbUrl(img)}
+                  alt={img.caption ?? ''}
+                  loading="lazy"
+                  width={img.width}
+                  height={img.height}
+                />
+              </a>
             ))}
-          </a>
+          </div>
         )}
       </div>
     ))}
   </div>
 </BaseLayout>
+
+<script>
+import PhotoSwipeLightbox from 'photoswipe/lightbox';
+import PhotoSwipe from 'photoswipe';
+import 'photoswipe/style.css';
+
+function initGalleryLightbox() {
+  if (document.body.dataset.giPswpInited === '1') return;
+  document.body.dataset.giPswpInited = '1';
+  const lightbox = new PhotoSwipeLightbox({
+    gallery: '.gi-masonry',
+    children: 'a[data-pswp-src]',
+    pswpModule: PhotoSwipe,
+    showHideAnimationType: 'fade',
+    bgOpacity: 1,
+  });
+  lightbox.init();
+}
+
+initGalleryLightbox();
+document.addEventListener('astro:page-load', () => {
+  document.body.dataset.giPswpInited = '0';
+  initGalleryLightbox();
+});
+</script>

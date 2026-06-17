@@ -13,9 +13,12 @@ import type { R2Bucket } from '@cloudflare/workers-types';
 export const GET: APIRoute = async (ctx) => {
   const key = ctx.params.key;
   if (!key) return new Response('not found', { status: 404 });
-  const e = env as unknown as { PHOTOS: R2Bucket };
+  const e = env as unknown as { PHOTOS: R2Bucket; R2_DEV_BASE?: string };
   const obj = await e.PHOTOS.get(key);
-  if (!obj) return new Response('not found', { status: 404 });
+  if (!obj) {
+    if (e.R2_DEV_BASE) return Response.redirect(`${e.R2_DEV_BASE}/${key}`, 302);
+    return new Response('not found', { status: 404 });
+  }
 
   const headers = new Headers();
   const ct = obj.httpMetadata?.contentType;
@@ -29,9 +32,12 @@ export const GET: APIRoute = async (ctx) => {
 export const HEAD: APIRoute = async (ctx) => {
   const key = ctx.params.key;
   if (!key) return new Response(null, { status: 404 });
-  const e = env as unknown as { PHOTOS: R2Bucket };
+  const e = env as unknown as { PHOTOS: R2Bucket; R2_DEV_BASE?: string };
   const obj = await e.PHOTOS.head(key);
-  if (!obj) return new Response(null, { status: 404 });
+  if (!obj) {
+    if (e.R2_DEV_BASE) return Response.redirect(`${e.R2_DEV_BASE}/${key}`, 302);
+    return new Response(null, { status: 404 });
+  }
   const headers = new Headers();
   const ct = obj.httpMetadata?.contentType;
   if (ct) headers.set('content-type', ct);

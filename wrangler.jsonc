@@ -16,7 +16,7 @@
   // deploy` (which removes any plaintext var not in this file). Sensitive
   // values stay in the dashboard as Secrets.
   "vars": {
-    "R2_DEV_BASE": "https://pub-bda4e92fe6f34988b885f5e793c31420.r2.dev",
+    "R2_DEV_BASE": "https://pub-7480ea7436e74ecba3571e8a20bd7944.r2.dev",
     "ALLOWED_USERS": "hoavo1490",
     "GITHUB_OAUTH_CLIENT_ID": "Ov23likTQeKJlWQ9d0bQ"
   }
