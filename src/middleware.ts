@@ -41,6 +41,21 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   if (mode === 'asset') return next();
 
+  // Dev-only bypass: set DEV_BYPASS_LOGIN=<githubLogin> in .dev.vars.
+  // Short-circuits ALL Neon calls for admin routes so the admin UI renders
+  // without a working DB or GitHub OAuth. Lists will be empty; UI is fully testable.
+  const devLogin = (env as unknown as { DEV_BYPASS_LOGIN?: string }).DEV_BYPASS_LOGIN;
+  if (devLogin && mode === 'admin') {
+    const localSlug = (env as unknown as { LOCAL_SITE_SLUG?: string }).LOCAL_SITE_SLUG ?? 'dev';
+    context.locals.db = { query: async () => [], exec: async () => {} };
+    context.locals.session = { sessionId: 'dev', userId: 'dev-bypass', githubLogin: devLogin };
+    context.locals.tenant = {
+      id: 'dev-bypass', slug: localSlug, name: localSlug,
+      customDomain: null, createdAt: new Date(), isCurrentHost: true,
+    };
+    return next();
+  }
+
   const driver = driverFromEnv();
   context.locals.db = driver;
 
