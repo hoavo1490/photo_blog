@@ -25,24 +25,9 @@ const posts = siteId
     )
   : [];
 ---
-<AdminLayout title="posts">
-  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px;">
+<AdminLayout title="posts" activeTab="posts" actionHref="/admin/new" actionLabel="+ new post">
+  <div style="margin-bottom: 16px;">
     <h2 style="font-size: 18px; font-weight: 600;">{posts.length} posts</h2>
-    <div style="display: flex; align-items: center; gap: 12px;">
-      <a href="/admin/about" style="
-        min-height: 44px; padding: 10px 16px;
-        color: var(--fg); border: 1px solid var(--border-strong);
-        border-radius: 999px;
-        display: inline-flex; align-items: center;
-        font-size: 14px;
-      ">Edit about</a>
-      <a href="/admin/new" class="primary" role="button" style="
-        min-height: 44px; padding: 10px 16px;
-        background: var(--accent); color: var(--accent-fg); border-radius: 999px;
-        display: inline-flex; align-items: center;
-        font-size: 14px; font-weight: 600;
-      ">+ new</a>
-    </div>
   </div>
 
   {sites.length === 0 ? (
