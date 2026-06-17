@@ -1,3 +1,16 @@
-// Gallery page overrides.
-// Component-specific styles live in scoped <style> blocks inside each
-// component. Add global overrides here only when they cannot be scoped.
+@import url('https://fonts.googleapis.com/css2?family=Waiting+for+the+Sunrise');
+
+// foto-style gallery: full-width sections, no container constraint.
+#foto-gallery { margin: 8px; }
+
+.foto-section { margin-top: 3em; }
+.foto-section-header { max-width: 800px; margin-left: 4em; }
+.foto-section-title {
+  font-family: 'Waiting for the Sunrise', cursive;
+  font-size: 1.6em;
+  line-height: 1.6em;
+  color: inherit;
+}
+.foto-section-description { line-height: 1.4em; margin-top: 0.3em; }
+.section-images { margin-top: 2em; }
+.section-images a img { width: 100%; display: block; }

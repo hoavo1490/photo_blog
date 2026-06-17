@@ -154,6 +154,42 @@ export async function findAlbumBySlug(
 
 // ----- list ----- //
 
+export async function listAlbumsWithImages(
+  driver: SqlDriver,
+  args: { siteId: string },
+): Promise<AlbumWithImages[]> {
+  const rows = await driver.query<AlbumWithImagesRow>(
+    `SELECT
+       a.id, a.site_id, a.title, a.slug, a.description, a.cover_image_id,
+       a.published, a.created_at, a.updated_at,
+       ai.image_id, ai.sort_order, ai.caption,
+       i.r2_key, i.width, i.height, i.variant_widths
+     FROM albums a
+     LEFT JOIN album_images ai ON ai.album_id = a.id
+     LEFT JOIN images i ON i.id = ai.image_id
+     WHERE a.site_id = $1 AND a.published = true
+     ORDER BY a.created_at DESC, ai.sort_order ASC, ai.created_at ASC`,
+    [args.siteId],
+  );
+
+  const albumMap = new Map<string, AlbumWithImages>();
+  for (const r of rows) {
+    if (!albumMap.has(r.id)) albumMap.set(r.id, { ...fromRow(r), images: [] });
+    if (r.image_id != null) {
+      albumMap.get(r.id)!.images.push({
+        imageId: r.image_id,
+        r2Key: r.r2_key!,
+        width: r.width!,
+        height: r.height!,
+        variantWidths: r.variant_widths,
+        caption: r.caption,
+        sortOrder: r.sort_order!,
+      });
+    }
+  }
+  return [...albumMap.values()];
+}
+
 export async function listAlbums(
   driver: SqlDriver,
   args: { siteId: string },
