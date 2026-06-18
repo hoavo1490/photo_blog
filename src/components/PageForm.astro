@@ -170,6 +170,7 @@ const { siteId, slug, pageTitle, body, bodyImages } = Astro.props;
     collapseImageTokens,
     rememberImage,
   } from '../scripts/image-tokens';
+  import { compressAndUpload } from '../scripts/image-compress-upload';
 
   const form = document.getElementById('page-form') as HTMLFormElement;
   const body = document.getElementById('body-area') as HTMLTextAreaElement;
@@ -218,41 +219,6 @@ const { siteId, slug, pageTitle, body, bodyImages } = Astro.props;
     return body.value;
   };
 
-  // ─── image compression + upload (same shape as PostForm) ────────────
-  const VARIANT_TARGETS = [400, 800, 1200, 1600, 2400];
-  async function resizeAt(bitmap: ImageBitmap, targetWidth: number, type: string, quality = 0.85): Promise<{ blob: Blob; width: number; height: number } | null> {
-    const ratio = Math.min(1, targetWidth / bitmap.width);
-    const w = Math.round(bitmap.width * ratio);
-    const h = Math.round(bitmap.height * ratio);
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, type, quality));
-    return blob ? { blob, width: w, height: h } : null;
-  }
-  async function compressAndUpload(file: File): Promise<{ id: string; url: string; editorUrl?: string } | null> {
-    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    const wantWidths = VARIANT_TARGETS.filter((w) => w <= bitmap.width);
-    if (wantWidths.length === 0) wantWidths.push(bitmap.width);
-    const jpegResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/jpeg', 0.80)));
-    const webpResults = await Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/webp', 0.80)));
-    const jpegs = jpegResults.filter((r): r is NonNullable<typeof r> => r !== null);
-    if (jpegs.length === 0) return null;
-    const webps = webpResults.filter((r): r is NonNullable<typeof r> => r !== null);
-    jpegs.sort((a, b) => b.width - a.width);
-    webps.sort((a, b) => b.width - a.width);
-    const primary = jpegs[0];
-    const fd = new FormData();
-    fd.append('siteId', siteId);
-    fd.append('width', String(primary.width));
-    fd.append('height', String(primary.height));
-    const stem = file.name.replace(/\.[^.]+$/, '');
-    for (const v of jpegs) fd.append(`file_${v.width}`, v.blob, `${stem}.${v.width}w.jpg`);
-    for (const v of webps) fd.append(`file_${v.width}_webp`, v.blob, `${stem}.${v.width}w.webp`);
-    const r = await fetch('/admin/api/upload', { method: 'POST', body: fd });
-    if (!r.ok) return null;
-    return await r.json();
-  }
 
   // ─── bottom toolbar bindings ────────────────────────────────────────
   bottomToolbar.addEventListener('click', (e) => {
@@ -275,13 +241,23 @@ const { siteId, slug, pageTitle, body, bodyImages } = Astro.props;
     const files = Array.from(imagePicker.files ?? []);
     imagePicker.value = '';
     for (const file of files) {
-      const r = await compressAndUpload(file);
+      let blobUrl: string | null = null;
+      const r = await compressAndUpload(
+        file,
+        siteId,
+        (preview) => {
+          blobUrl = preview;
+          if (editor) editor.insertImageBlock(preview);
+        },
+        () => {},
+      );
       if (!r) continue;
       const renderUrl = r.editorUrl ?? r.url;
+      if (blobUrl) rememberImage(imageMap, { id: r.id, url: blobUrl });
       if (renderUrl !== r.url) rememberImage(imageMap, { id: r.id, url: r.url });
       rememberImage(imageMap, { id: r.id, url: renderUrl });
       if (editor) {
-        editor.insertImageBlock(renderUrl);
+        if (!blobUrl) editor.insertImageBlock(renderUrl);
         body.value = collapseImageTokens(editor.getMarkdown(), imageMap);
       }
     }

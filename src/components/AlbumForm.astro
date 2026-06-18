@@ -91,6 +91,7 @@ const photoCount = initialImages.length;
 
 <script>
 import { slugify } from '~/lib/slug';
+import { compressAndUpload } from '../scripts/image-compress-upload';
 
 const dataEl = document.getElementById('album-data') as HTMLScriptElement;
 const { mode, siteId, albumId, initialImages } = JSON.parse(dataEl.textContent!);
@@ -105,7 +106,7 @@ type UploadedImage = {
 const images: UploadedImage[] = initialImages.map((img: any) => {
   const w = (img.variantWidths ?? []).includes(400) ? 400 : (img.variantWidths?.[0] ?? null);
   const previewUrl = w
-    ? `/img/${img.r2Key.replace(/\.(jpe?g|png|webp|gif)$/i, '')}.${w}w.jpg`
+    ? `/img/${img.r2Key.replace(/\.(jpe?g|png|webp|gif)$/i, '')}.${w}w.webp`
     : `/img/${img.r2Key}`;
   return { imageId: img.imageId, previewUrl, width: img.width, height: img.height };
 });
@@ -157,47 +158,6 @@ renderGrid();
 
 btnAddImages.addEventListener('click', () => fileInput.click());
 
-const VARIANT_TARGETS = [400, 800, 1200, 1600, 2400];
-
-async function resizeAt(
-  bitmap: ImageBitmap,
-  targetWidth: number,
-  type: string,
-  quality = 0.80,
-): Promise<{ blob: Blob; width: number; height: number } | null> {
-  const ratio = Math.min(1, targetWidth / bitmap.width);
-  const w = Math.round(bitmap.width * ratio);
-  const h = Math.round(bitmap.height * ratio);
-  const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
-  const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, type, quality));
-  return blob ? { blob, width: w, height: h } : null;
-}
-
-async function compressAndUpload(file: File): Promise<{ id: string; url: string; editorUrl: string; variantWidths: number[] } | null> {
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  const wantWidths = VARIANT_TARGETS.filter((w) => w <= bitmap.width);
-  if (wantWidths.length === 0) wantWidths.push(bitmap.width);
-  const [jpegResults, webpResults] = await Promise.all([
-    Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/jpeg', 0.80))),
-    Promise.all(wantWidths.map((w) => resizeAt(bitmap, w, 'image/webp', 0.80))),
-  ]);
-  const jpegs = jpegResults.filter((r): r is NonNullable<typeof r> => r !== null);
-  if (jpegs.length === 0) return null;
-  const webps = webpResults.filter((r): r is NonNullable<typeof r> => r !== null);
-  jpegs.sort((a, b) => b.width - a.width);
-  webps.sort((a, b) => b.width - a.width);
-  const stem = file.name.replace(/\.[^.]+$/, '');
-  const fd = new FormData();
-  fd.append('siteId', siteId);
-  for (const v of jpegs) fd.append(`file_${v.width}`, v.blob, `${stem}.${v.width}w.jpg`);
-  for (const v of webps) fd.append(`file_${v.width}_webp`, v.blob, `${stem}.${v.width}w.webp`);
-  const resp = await fetch('/admin/api/upload', { method: 'POST', body: fd });
-  if (!resp.ok) return null;
-  return resp.json();
-}
-
 fileInput.addEventListener('change', async () => {
   const files = Array.from(fileInput.files ?? []);
   if (!files.length) return;
@@ -207,9 +167,26 @@ fileInput.addEventListener('change', async () => {
     uploadStatus.textContent = `Uploading ${file.name}…`;
     btnSave.disabled = true;
     try {
-      const data = await compressAndUpload(file);
+      let previewInserted = false;
+      const data = await compressAndUpload(
+        file,
+        siteId,
+        (blobUrl) => {
+          previewInserted = true;
+          images.push({ imageId: '', previewUrl: blobUrl, width: 0, height: 0 });
+          renderGrid();
+        },
+        (pct) => { uploadStatus.textContent = `Uploading ${file.name}… ${pct}%`; },
+      );
       if (!data) throw new Error('compression or upload failed');
-      images.push({ imageId: data.id, previewUrl: data.editorUrl, width: 0, height: 0 });
+      if (previewInserted) {
+        const placeholder = images.findIndex((img) => img.imageId === '');
+        if (placeholder !== -1) {
+          images[placeholder] = { imageId: data.id, previewUrl: data.editorUrl ?? data.url, width: 0, height: 0 };
+        }
+      } else {
+        images.push({ imageId: data.id, previewUrl: data.editorUrl ?? data.url, width: 0, height: 0 });
+      }
       renderGrid();
     } catch (e) {
       uploadStatus.textContent = `Upload failed: ${(e as Error).message}`;

@@ -133,10 +133,10 @@ export const POST: APIRoute = async (ctx) => {
     throw err;
   }
 
-  // Variant widths recorded for the JPEG track (PostCard derives WebP
-  // URLs by string substitution from the same set).
+  // Variant widths: count all non-primary variants (JPEG or WebP). New
+  // uploads send WebP-only variants, so filtering by jpeg would produce [].
   const variantWidths = [...new Set(
-    parts.filter((p, i) => i > 0 && p.format === 'jpeg').map((p) => p.width),
+    parts.filter((_p, i) => i > 0).map((p) => p.width),
   )].sort((a, b) => a - b);
 
   const image = await imagesRepo.create(driver, {

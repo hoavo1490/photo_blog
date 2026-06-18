@@ -137,7 +137,7 @@ export function editorPreviewUrlForKey(
 ): string {
   const order: number[] = [800, 1200, 400];
   for (const w of order) {
-    if (variantWidths.includes(w)) return `/img/${variantKeyForKey(key, w)}`;
+    if (variantWidths.includes(w)) return `/img/${variantKeyForKey(key, w).replace(/\.jpg$/, '.webp')}`;
   }
   return `/img/${key}`;
 }

@@ -141,21 +141,19 @@ describe('publicUrlForKey', () => {
 });
 
 describe('editorPreviewUrlForKey', () => {
-  // 800w is the sweet spot: ~95KB JPEG / ~57KB AVIF on a 4:3 photo,
-  // and sharp enough on a 2x DPR ~400px editor column.
-  it('prefers the 800w variant when available', () => {
+  it('prefers the 800w variant when available (WebP)', () => {
     const url = editorPreviewUrlForKey('s/2026/06/14/abc-photo.jpg', [400, 800, 1200]);
-    expect(url).toBe('/img/s/2026/06/14/abc-photo.800w.jpg');
+    expect(url).toBe('/img/s/2026/06/14/abc-photo.800w.webp');
   });
 
-  it('falls back to 1200w when 800w is missing', () => {
+  it('falls back to 1200w when 800w is missing (WebP)', () => {
     const url = editorPreviewUrlForKey('s/2026/06/14/abc-photo.jpg', [400, 1200]);
-    expect(url).toBe('/img/s/2026/06/14/abc-photo.1200w.jpg');
+    expect(url).toBe('/img/s/2026/06/14/abc-photo.1200w.webp');
   });
 
-  it('falls back to 400w when only smaller variants exist', () => {
+  it('falls back to 400w when only smaller variants exist (WebP)', () => {
     const url = editorPreviewUrlForKey('s/x.jpg', [400]);
-    expect(url).toBe('/img/s/x.400w.jpg');
+    expect(url).toBe('/img/s/x.400w.webp');
   });
 
   it('falls back to the canonical URL when no variants exist', () => {
@@ -164,8 +162,8 @@ describe('editorPreviewUrlForKey', () => {
   });
 
   it('strips the file extension correctly for variant keys', () => {
-    expect(editorPreviewUrlForKey('s/photo.png', [800])).toBe('/img/s/photo.800w.jpg');
-    expect(editorPreviewUrlForKey('s/photo.JPEG', [800])).toBe('/img/s/photo.800w.jpg');
+    expect(editorPreviewUrlForKey('s/photo.png', [800])).toBe('/img/s/photo.800w.webp');
+    expect(editorPreviewUrlForKey('s/photo.JPEG', [800])).toBe('/img/s/photo.800w.webp');
   });
 });
 

@@ -13,7 +13,9 @@ const all = await albums.listAlbumsWithImages(driver, { siteId: tenant.id });
 function thumbUrl(img: { r2Key: string; variantWidths: number[] | null }): string {
   const variants = img.variantWidths ?? [];
   for (const w of [800, 1200, 400]) {
-    if (variants.includes(w)) return publicUrlForKey(variantKeyForKey(img.r2Key, w), env_);
+    if (variants.includes(w)) {
+      return publicUrlForKey(variantKeyForKey(img.r2Key, w).replace(/\.jpg$/, '.webp'), env_);
+    }
   }
   return publicUrlForKey(img.r2Key, env_);
 }
@@ -21,7 +23,9 @@ function thumbUrl(img: { r2Key: string; variantWidths: number[] | null }): strin
 function fullUrl(img: { r2Key: string; variantWidths: number[] | null }): string {
   const variants = img.variantWidths ?? [];
   for (const w of [1600, 1200, 800]) {
-    if (variants.includes(w)) return publicUrlForKey(variantKeyForKey(img.r2Key, w), env_);
+    if (variants.includes(w)) {
+      return publicUrlForKey(variantKeyForKey(img.r2Key, w).replace(/\.jpg$/, '.webp'), env_);
+    }
   }
   return publicUrlForKey(img.r2Key, env_);
 }
