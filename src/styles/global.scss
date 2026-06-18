@@ -71,6 +71,7 @@ header.site-header {
     position: relative;
     top: 1em;
     span { margin: .5em; }
+    span:last-child { margin-right: 0; }
     a {
       font-family: #{$label-font}; color: #ccc;
       // 44x44 minimum touch target per Apple HIG / Google M3. The 18px
@@ -82,6 +83,7 @@ header.site-header {
       min-height: 44px;
       &:hover { color: #dd1144; }
     }
+    span:last-child a { justify-content: flex-end; padding-right: 0; min-width: auto; }
   }
 }
 
