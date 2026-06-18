@@ -33,12 +33,17 @@ function fullUrl(img: { r2Key: string; variantWidths: number[] | null }): string
 function fmtDate(d: Date): string {
   return `${d.getMonth() + 1} · ${d.getFullYear()}`;
 }
+
+// Preload the first visible gallery image (LCP candidate).
+const lcpThumb = all.length > 0 && all[0].images.length > 0
+  ? thumbUrl(all[0].images[0])
+  : undefined;
 ---
-<BaseLayout title="Gallery">
+<BaseLayout title="Gallery" lcpImage={lcpThumb ? { src: lcpThumb } : undefined}>
   <div class="gi">
     {all.length === 0 ? (
       <p class="gi-empty">No albums yet.</p>
-    ) : all.map((album) => (
+    ) : all.map((album, albumIdx) => (
       <div class="gi-album">
         <div class="gi-row">
           <span class="gi-title">{album.title}</span>
@@ -46,22 +51,28 @@ function fmtDate(d: Date): string {
         </div>
         {album.images.length > 0 && (
           <div class="gi-masonry">
-            {album.images.map((img) => (
-              <a
-                href={fullUrl(img)}
-                data-pswp-src={fullUrl(img)}
-                data-pswp-width={img.width}
-                data-pswp-height={img.height}
-              >
-                <img
-                  src={thumbUrl(img)}
-                  alt={img.caption ?? ''}
-                  loading="lazy"
-                  width={img.width}
-                  height={img.height}
-                />
-              </a>
-            ))}
+            {album.images.map((img, imgIdx) => {
+              const isLcp = albumIdx === 0 && imgIdx === 0;
+              return (
+                <a
+                  href={fullUrl(img)}
+                  data-pswp-src={fullUrl(img)}
+                  data-pswp-width={img.width}
+                  data-pswp-height={img.height}
+                  aria-label={img.caption ?? `Photo ${imgIdx + 1}`}
+                >
+                  <img
+                    src={thumbUrl(img)}
+                    alt={img.caption ?? ''}
+                    loading={isLcp ? 'eager' : 'lazy'}
+                    decoding={isLcp ? 'sync' : 'async'}
+                    fetchpriority={isLcp ? 'high' : 'auto'}
+                    width={img.width}
+                    height={img.height}
+                  />
+                </a>
+              );
+            })}
           </div>
         )}
       </div>
