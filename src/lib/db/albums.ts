@@ -24,9 +24,15 @@ interface AlbumRow {
   slug: string;
   description: string | null;
   cover_image_id: string | null;
-  published: boolean;
+  published: boolean | number;
   created_at: string | Date;
   updated_at: string | Date;
+}
+
+function parseVariantWidths(raw: number[] | string | null | undefined): number[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw.map(Number);
+  try { return (JSON.parse(raw) as unknown[]).map(Number); } catch { return []; }
 }
 
 function fromRow(r: AlbumRow): Album {
@@ -37,7 +43,7 @@ function fromRow(r: AlbumRow): Album {
     slug: r.slug,
     description: r.description,
     coverImageId: r.cover_image_id,
-    published: r.published,
+    published: Boolean(r.published),
     createdAt: new Date(r.created_at as string | Date),
     updatedAt: new Date(r.updated_at as string | Date),
   };
@@ -53,7 +59,7 @@ export interface AlbumImageRow {
   r2Key: string;
   width: number;
   height: number;
-  variantWidths: number[] | null;
+  variantWidths: number[];
   caption: string | null;
   sortOrder: number;
 }
@@ -108,7 +114,7 @@ interface AlbumWithImagesRow extends AlbumRow {
   r2_key: string | null;
   width: number | null;
   height: number | null;
-  variant_widths: number[] | null;
+  variant_widths: number[] | string | null;
 }
 
 export async function findAlbumBySlug(
@@ -142,7 +148,7 @@ export async function findAlbumBySlug(
         r2Key: r.r2_key!,
         width: r.width!,
         height: r.height!,
-        variantWidths: r.variant_widths,
+        variantWidths: parseVariantWidths(r.variant_widths),
         caption: r.caption,
         sortOrder: r.sort_order!,
       });
@@ -181,7 +187,7 @@ export async function listAlbumsWithImages(
         r2Key: r.r2_key!,
         width: r.width!,
         height: r.height!,
-        variantWidths: r.variant_widths,
+        variantWidths: parseVariantWidths(r.variant_widths),
         caption: r.caption,
         sortOrder: r.sort_order!,
       });

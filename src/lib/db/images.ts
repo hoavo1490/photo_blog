@@ -31,8 +31,14 @@ interface ImageRow {
   height: number;
   uploaded_by: string | null;
   uploaded_at: string | Date;
-  variant_widths: number[] | null;
-  has_avif: boolean | null;
+  variant_widths: number[] | string | null;
+  has_avif: boolean | number | null;
+}
+
+function parseVariantWidths(raw: number[] | string | null | undefined): number[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw.map(Number);
+  try { return (JSON.parse(raw) as unknown[]).map(Number); } catch { return []; }
 }
 
 function fromRow(r: ImageRow): Image {
@@ -46,8 +52,8 @@ function fromRow(r: ImageRow): Image {
     height: typeof r.height === 'string' ? parseInt(r.height, 10) : r.height,
     uploadedBy: r.uploaded_by,
     uploadedAt: new Date(r.uploaded_at as string | Date),
-    variantWidths: (r.variant_widths ?? []).map((n) => typeof n === 'string' ? parseInt(n, 10) : n),
-    hasAvif: r.has_avif ?? false,
+    variantWidths: parseVariantWidths(r.variant_widths),
+    hasAvif: Boolean(r.has_avif),
   };
 }
 
@@ -75,25 +81,36 @@ export async function create(driver: SqlDriver, input: CreateImageInput): Promis
   // A cross-site collision (same r2_key, different site) returns zero
   // rows; we then raise so a tenant can't claim another tenant's image.
   const variantWidths = input.variantWidths ?? [];
-  const rows = await driver.query<ImageRow>(
-    `INSERT INTO images (site_id, r2_key, original_name, size_bytes, width, height, uploaded_by, variant_widths)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT (r2_key) DO UPDATE SET
-       original_name = EXCLUDED.original_name,
-       variant_widths = EXCLUDED.variant_widths
-       WHERE images.site_id = EXCLUDED.site_id
-     RETURNING ${SELECT}`,
-    [
-      input.siteId,
-      input.r2Key,
-      input.originalName,
-      input.sizeBytes,
-      input.width,
-      input.height,
-      input.uploadedBy,
-      variantWidths,
-    ],
-  );
+  let rows: ImageRow[];
+  try {
+    rows = await driver.query<ImageRow>(
+      `INSERT INTO images (site_id, r2_key, original_name, size_bytes, width, height, uploaded_by, variant_widths)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (r2_key) DO UPDATE SET
+         original_name = EXCLUDED.original_name,
+         variant_widths = EXCLUDED.variant_widths
+         WHERE images.site_id = EXCLUDED.site_id
+       RETURNING ${SELECT}`,
+      [
+        input.siteId,
+        input.r2Key,
+        input.originalName,
+        input.sizeBytes,
+        input.width,
+        input.height,
+        input.uploadedBy,
+        variantWidths,
+      ],
+    );
+  } catch (e: unknown) {
+    // SQLite raises a UNIQUE constraint error when the conflict target's
+    // WHERE clause is false (cross-site collision). Normalise to the same
+    // error message callers expect from the Postgres path (0 rows returned).
+    if (e instanceof Error && /UNIQUE constraint failed/i.test(e.message)) {
+      throw new Error(`r2_key ${input.r2Key} is already owned by a different site`);
+    }
+    throw e;
+  }
   if (rows.length === 0) {
     throw new Error(`r2_key ${input.r2Key} is already owned by a different site`);
   }

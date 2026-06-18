@@ -1,6 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { env } from 'cloudflare:workers';
 import { createNeonDriver } from './lib/db/neon-driver';
+import { createD1Driver } from './lib/db/d1-driver';
 import { classifyRoute, isCacheableMethod } from './lib/middleware/route-mode';
 import { resolveTenant, historicRedirectUrl } from './lib/middleware/tenant';
 import { findBySlug } from './lib/db/sites';
@@ -29,9 +30,10 @@ declare global {
 
 function driverFromEnv() {
   if (globalThis.__RIOVV_TEST_DRIVER__) return globalThis.__RIOVV_TEST_DRIVER__;
-  const url = (env as unknown as { DATABASE_URL?: string }).DATABASE_URL;
-  if (!url) throw new Error('DATABASE_URL not bound');
-  return createNeonDriver(url);
+  const e = env as unknown as { DB?: unknown; DATABASE_URL?: string };
+  if (e.DB) return createD1Driver(e.DB as import('@cloudflare/workers-types').D1Database);
+  if (e.DATABASE_URL) return createNeonDriver(e.DATABASE_URL);
+  throw new Error('No database: add D1 binding (DB) or set DATABASE_URL secret');
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
