@@ -6,149 +6,99 @@
 // (`.preview-area`). Each consumer @includes this mixin under the
 // scope selector that wraps their rendered content.
 //
-// Rules are emitted as nested `&` selectors. Specificity matters:
-// when included at `article .post { @include post-typography; }`,
-// the nested `& p` compiles to `article .post p` (0,2,1), which
-// beats both the soon-deleted `article p` (0,1,1) and any bare
-// global `p` rule (0,0,1). DO NOT change `&` to bare selectors --
-// that would re-introduce the leakage problem this file exists to
-// eliminate.
+// $astro -- set to `true` when the call site is inside an Astro
+// `<style lang="scss">` block. Astro's CSS scoping pass appends
+// `[data-astro-cid-*]` to every element-name token NOT already
+// wrapped in `:global(...)`. Crepe-injected DOM and `set:html`
+// content from `marked.parse()` don't carry that scope attribute,
+// so a plain `& p` descendant rule silently fails to match at
+// runtime. With `$astro: true` each descendant is emitted as
+// `:global(p)`, which Sass passes through and Astro then strips,
+// leaving an unscoped `.ProseMirror p` in compiled output.
+//
+// In a non-Astro context (global.scss) the default `& p` form
+// emits a properly nested descendant. Specificity matters there:
+// when included at `article .post { ... }`, `& p` compiles to
+// `article .post p` (0,2,1), beating the soon-deleted `article p`
+// (0,1,1) and any bare global `p` rule (0,0,1).
 //
 // `color` is left to the host scope: editor + preview set
 // `color: var(--fg)` at their host selector; published inherits
-// from `body { color: #555 }`. The mixin does not touch `color`.
+// from `body { color: #555 }`.
 //
 // Out of scope (intentional drift between editor and published):
-// links (`a`), inline `code`, `pre`, and `hr`. Convergence here
-// would expand scope per the design doc.
-//
-// $astro: set to `true` when the call site is inside an Astro scoped
-// `<style>` block. Astro's CSS pipeline appends `[data-astro-cid-*]`
-// to every element-name token NOT already inside a `:global()`
-// wrapper. The `& p`, `& h1`, etc. nested selectors would otherwise
-// compile to e.g. `.ProseMirror p[data-cid]` — and since
-// Crepe-injected DOM / marked.parse() output does not carry the scope
-// attribute, those rules silently fail at runtime. With `$astro: true`
-// each descendant is emitted as `:global(p)` so Astro strips the
-// wrapper and the final selector stays unscoped (`.ProseMirror p`).
+// links (`a`), inline `code`, `pre`, and `hr`.
 
 @mixin post-typography($astro: false) {
+  // Build descendant selectors once so the rule bodies aren't
+  // duplicated across an `@if/@else`. `#{...}` interpolates the
+  // selector string at parse time; the result is identical to
+  // writing `& p` or `:global(p)` literally.
+  $p:          if($astro, ':global(p)',          '& p');
+  $h1:         if($astro, ':global(h1)',         '& h1');
+  $h2:         if($astro, ':global(h2)',         '& h2');
+  $h3:         if($astro, ':global(h3)',         '& h3');
+  $blockquote: if($astro, ':global(blockquote)', '& blockquote');
+  $ul:         if($astro, ':global(ul)',         '& ul');
+  $ol:         if($astro, ':global(ol)',         '& ol');
+  $li:         if($astro, ':global(li)',         '& li');
+  $img:        if($astro, ':global(img)',        '& img');
+  $picture:    if($astro, ':global(picture)',    '& picture');
+
   font-size: 17px;
   line-height: 1.7;
 
-  @if $astro {
-    :global(p) { margin: 0 0 16px; }
+  #{$p} { margin: 0 0 16px; }
 
-    :global(h1) {
-      font-size: 28px;
-      font-weight: 700;
-      margin: 28px 0 12px;
-      letter-spacing: -0.015em;
-    }
-    :global(h2) {
-      font-size: 22px;
-      font-weight: 700;
-      margin: 24px 0 10px;
-      letter-spacing: -0.01em;
-    }
-    :global(h3) {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 20px 0 8px;
-    }
+  #{$h1} {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 28px 0 12px;
+    letter-spacing: -0.015em;
+  }
+  #{$h2} {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 24px 0 10px;
+    letter-spacing: -0.01em;
+  }
+  #{$h3} {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 20px 0 8px;
+  }
 
-    :global(blockquote) {
-      margin: 16px 0;
-      padding: 2px 0 2px 18px;
-      // The global `blockquote` rule uses `border: 1px dashed
-      // !important`. The !important applies to all four sides; we
-      // must mark our overrides !important to win the cascade.
-      border-top: none !important;
-      border-right: none !important;
-      border-bottom: none !important;
-      border-left: 3px solid var(--border-strong, #d0d0d0) !important;
-      color: var(--muted, #767676);
-      // Clear the rest of the global blockquote rule. background is
-      // not !important so higher specificity from the nested selector
-      // wins. line-height needs an explicit `inherit` because the
-      // global rule sets it directly on `blockquote` (specificity
-      // 0,0,1) and would otherwise beat host inheritance.
-      background: none;
-      font-size: inherit;
-      line-height: inherit;
-    }
+  #{$blockquote} {
+    margin: 16px 0;
+    padding: 2px 0 2px 18px;
+    // The global `blockquote` rule uses `border: 1px dashed
+    // !important`. The !important applies to all four sides; we
+    // must mark our overrides !important to win the cascade.
+    border-top: none !important;
+    border-right: none !important;
+    border-bottom: none !important;
+    border-left: 3px solid var(--border-strong, #d0d0d0) !important;
+    color: var(--muted, #767676);
+    // background is not !important so higher specificity wins.
+    // line-height needs explicit `inherit` because the global rule
+    // sets it directly on `blockquote`; any directly-applied value
+    // beats inheritance regardless of specificity.
+    background: none;
+    font-size: inherit;
+    line-height: inherit;
+  }
 
-    :global(ul),
-    :global(ol) {
-      margin: 0 0 16px;
-      padding-left: 24px;
-      list-style-position: outside;
-    }
-    :global(li) { margin: 4px 0; padding: 0; }
+  #{$ul}, #{$ol} {
+    margin: 0 0 16px;
+    padding-left: 24px;
+    list-style-position: outside;
+  }
+  #{$li} { margin: 4px 0; padding: 0; }
 
-    :global(img),
-    :global(picture) {
-      max-width: 100%;
-      height: auto;
-      display: block;
-      margin: 16px auto;
-    }
-  } @else {
-    & p { margin: 0 0 16px; }
-
-    & h1 {
-      font-size: 28px;
-      font-weight: 700;
-      margin: 28px 0 12px;
-      letter-spacing: -0.015em;
-    }
-    & h2 {
-      font-size: 22px;
-      font-weight: 700;
-      margin: 24px 0 10px;
-      letter-spacing: -0.01em;
-    }
-    & h3 {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 20px 0 8px;
-    }
-
-    & blockquote {
-      margin: 16px 0;
-      padding: 2px 0 2px 18px;
-      // The global `blockquote` rule uses `border: 1px dashed
-      // !important`. The !important applies to all four sides; we
-      // must mark our overrides !important to win the cascade.
-      border-top: none !important;
-      border-right: none !important;
-      border-bottom: none !important;
-      border-left: 3px solid var(--border-strong, #d0d0d0) !important;
-      color: var(--muted, #767676);
-      // Clear the rest of the global blockquote rule. background is
-      // not !important so higher specificity from the nested selector
-      // wins. line-height needs an explicit `inherit` because the
-      // global rule sets it directly on `blockquote` (specificity
-      // 0,0,1) and would otherwise beat host inheritance.
-      background: none;
-      font-size: inherit;
-      line-height: inherit;
-    }
-
-    & ul,
-    & ol {
-      margin: 0 0 16px;
-      padding-left: 24px;
-      list-style-position: outside;
-    }
-    & li { margin: 4px 0; padding: 0; }
-
-    & img,
-    & picture {
-      max-width: 100%;
-      height: auto;
-      display: block;
-      margin: 16px auto;
-    }
+  #{$img}, #{$picture} {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 16px auto;
   }
 }
