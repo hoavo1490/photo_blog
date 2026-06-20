@@ -158,7 +158,9 @@ const tagsChipText = formatTagsChip(initialTagNames);
   </div>
 </form>
 
-<style>
+<style lang="scss">
+@use "../styles/post-content" as *;
+
   /* Editor layout: full-viewport flex column. The Crepe body editor
      takes the middle, the sticky header + status row stack at the top,
      and the bottom toolbar docks at the bottom. */
@@ -350,25 +352,10 @@ const tagsChipText = formatTagsChip(initialTagNames);
     padding: 32px 20px 96px;
     min-height: 100%;
     outline: none;
-    font-size: 17px;
-    line-height: 1.7;
     color: var(--fg);
     box-sizing: border-box;
+    @include post-typography;
   }
-  .milkdown-host :global(.ProseMirror p) { margin: 0 0 16px; }
-  .milkdown-host :global(.ProseMirror h1) { font-size: 28px; font-weight: 700; margin: 28px 0 12px; letter-spacing: -0.015em; }
-  .milkdown-host :global(.ProseMirror h2) { font-size: 22px; font-weight: 700; margin: 24px 0 10px; letter-spacing: -0.01em; }
-  .milkdown-host :global(.ProseMirror h3) { font-size: 18px; font-weight: 600; margin: 20px 0 8px; }
-  .milkdown-host :global(.ProseMirror blockquote) {
-    margin: 16px 0; padding: 2px 0 2px 18px;
-    border-left: 3px solid var(--border-strong);
-    color: var(--muted);
-  }
-  .milkdown-host :global(.ProseMirror ul),
-  .milkdown-host :global(.ProseMirror ol) {
-    margin: 0 0 16px; padding-left: 24px;
-  }
-  .milkdown-host :global(.ProseMirror li) { margin: 4px 0; }
   .milkdown-host :global(.ProseMirror a) {
     color: var(--fg);
     text-decoration: underline;
@@ -420,23 +407,19 @@ const tagsChipText = formatTagsChip(initialTagNames);
     flex: 1;
     padding: 32px 20px 96px;
     max-width: 720px; margin: 0 auto; width: 100%;
-    line-height: 1.7; font-size: 17px;
     color: var(--fg);
     overflow-y: auto;
-  }
-  .preview-area :global(picture),
-  .preview-area :global(img) {
-    max-width: 100%; height: auto; border-radius: 4px; display: block;
-    margin: 16px auto;
-  }
-  .preview-area :global(h1) { font-size: 28px; font-weight: 700; margin: 28px 0 12px; letter-spacing: -0.015em; }
-  .preview-area :global(h2) { font-size: 22px; font-weight: 700; margin: 24px 0 10px; letter-spacing: -0.01em; }
-  .preview-area :global(h3) { font-size: 18px; font-weight: 600; margin: 20px 0 8px; }
-  .preview-area :global(p)  { margin: 0 0 16px; }
-  .preview-area :global(blockquote) {
-    margin: 16px 0; padding: 2px 0 2px 18px;
-    border-left: 3px solid var(--border-strong);
-    color: var(--muted);
+    @include post-typography;
+
+    // The preview surface renders the same HTML pipeline as the
+    // published post, including `marked.parse` -> sanitize. The
+    // mixin's `& img`/`& picture` rule covers margins + max-width;
+    // border-radius is a preview-only affordance (no equivalent on
+    // published, which doesn't round images) and stays here.
+    :global(picture),
+    :global(img) {
+      border-radius: 4px;
+    }
   }
   .preview-placeholder { color: var(--muted-2); font-size: 14px; }
 
