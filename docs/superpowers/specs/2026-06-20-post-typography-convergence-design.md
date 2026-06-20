@@ -29,6 +29,7 @@ Header, footer, site nav, listings, post title chrome (`article .title h1`), met
 - No changes to lightbox, `data-pswp-src`, the responsive `<picture>` element, or LCP image emission.
 - No changes to Crepe inline chrome hiding rules or the `.milkdown-image-block` centering overrides.
 - No changes to the post title `article .title h1` (1.15em). The body-H1 / title-H1 asymmetry is intentional.
+- Link (`a`), inline code (`code`), `pre`, and `hr` styling drift between editor and published post is **out of scope**. The editor uses `color: var(--fg)` underlined links; published posts use the global `a { color: #bb2222 }`. Same applies to `code` (dashed-border chip on published), `pre`, and `hr`. These are not breakline issues and convergence here would expand scope.
 
 ## Approach
 
@@ -56,11 +57,20 @@ img, picture     max-width: 100%; height: auto; display: block;
                  margin: 16px auto; (auto centers; no border-radius change)
 ```
 
+### Mixin emission form
+
+The mixin emits **nested** rules using `&` (e.g. `& p { ... }`, `& h1 { ... }`), not bare selectors. This is required: when included at `article .post { ... }`, nesting compiles to `article .post p` (specificity 0,2,1), which beats both the soon-to-be-deleted `article p` (0,1,1) and any bare global `p` (0,0,1). Bare rules inside the mixin would re-create the leakage problem this spec is designed to eliminate.
+
+The mixin's outer block sets `font-size` and `line-height` on the host selector itself; nested `& p`, `& h1`...`& h3`, `& blockquote`, `& ul`, `& ol`, `& li`, `& img`, `& picture` carry the per-element rules.
+
 ### Call sites
 
 ```scss
 // src/styles/global.scss
 article .post { @include post-typography; }
+// → article .post { font-size: 17px; ... }
+// → article .post p { margin: 0 0 16px; }
+// → article .post h1 { ... }  etc.
 
 // src/components/PostForm.astro (scoped style block)
 .milkdown-host :global(.ProseMirror) { @include post-typography; }
@@ -80,9 +90,11 @@ The global `blockquote { background: #f8f8f8; padding: 0 1em; border: 1px dashed
 
 ### Image rules
 
-`PostLayout` published images get rewritten by `rewriteImageTokens` into `<picture>` elements with `data-pswp-src`. The existing global rule `article .post img[data-pswp-src] { cursor: zoom-in }` stays — the mixin does not touch `cursor`. Margins and max-width unify.
+The current global rule at `global.scss` line 133 — `article { .post { img { max-width: 100%; height: auto; display: block; margin: .5em auto; } } }` — is **superseded by the mixin** and deleted (see File-level changes). The mixin's `& img` rule replaces it with `margin: 16px auto`.
 
-`PostForm` editor images live inside `.milkdown-image-block` and already have explicit centering/sizing rules (lines ~385–400). Those Crepe-specific overrides stay; they target `.milkdown-image-block`, not `img`, so they do not collide with the mixin's `img` rule.
+The cursor rule `article .post img[data-pswp-src] { cursor: zoom-in }` (line 137) is **not** in the mixin and **stays as-is** — it carries the lightbox affordance that has nothing to do with typographic rhythm.
+
+`PostForm` editor images live inside `.milkdown-image-block` and already have explicit centering/sizing rules (PostForm.astro lines ~385–400). Those Crepe-specific overrides stay; they target `.milkdown-image-block` (and the inner `.image-wrapper img` with `!important`), not bare `img`, so they win over the mixin's `& img` rule via specificity + `!important` on the inner declarations.
 
 `PostForm` preview area renders the same HTML as the published post (same `marked.parse` pipeline). The mixin handles both `img` and `picture`.
 
@@ -96,7 +108,9 @@ Editor and preview keep `max-width: 720px` (fixed). Published post keeps the res
 2. **Modified**: `src/styles/global.scss`
    - `@use "post-content" as *;` at top
    - Delete `article p { padding: .7em 0; }` (line 109)
-   - Add `article .post { @include post-typography; }` as a sibling rule inside the `article` block, placed **after** the existing `.post { img { ... } }` rule and the `.post img[data-pswp-src]` cursor rule so the mixin's `img` margins resolve in source order without overriding the lightbox cursor.
+   - Delete the inner `.post { img { max-width: 100%; height: auto; display: block; margin: .5em auto; } }` block (line 133). The mixin's `& img` rule replaces it.
+   - Keep `article .post img[data-pswp-src] { cursor: zoom-in; }` (line 137) — outside the mixin's scope.
+   - Add `article .post { @include post-typography; }` inside the existing `article { ... }` block so the nested-selector scoping is rooted under `article`.
 3. **Modified**: `src/components/PostForm.astro`
    - Replace the inline body/paragraph/heading/blockquote/list rules in the `.milkdown-host` and `.preview-area` blocks with `@include post-typography;` (under each scope selector). Keep the Crepe-specific image-block overrides, chrome-hiding rules, max-width, padding, and color tokens.
 4. **Modified**: `src/components/PageForm.astro`
