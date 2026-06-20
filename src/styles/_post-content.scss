@@ -21,65 +21,134 @@
 // Out of scope (intentional drift between editor and published):
 // links (`a`), inline `code`, `pre`, and `hr`. Convergence here
 // would expand scope per the design doc.
+//
+// $astro: set to `true` when the call site is inside an Astro scoped
+// `<style>` block. Astro's CSS pipeline appends `[data-astro-cid-*]`
+// to every element-name token NOT already inside a `:global()`
+// wrapper. The `& p`, `& h1`, etc. nested selectors would otherwise
+// compile to e.g. `.ProseMirror p[data-cid]` — and since
+// Crepe-injected DOM / marked.parse() output does not carry the scope
+// attribute, those rules silently fail at runtime. With `$astro: true`
+// each descendant is emitted as `:global(p)` so Astro strips the
+// wrapper and the final selector stays unscoped (`.ProseMirror p`).
 
-@mixin post-typography {
+@mixin post-typography($astro: false) {
   font-size: 17px;
   line-height: 1.7;
 
-  & p { margin: 0 0 16px; }
+  @if $astro {
+    :global(p) { margin: 0 0 16px; }
 
-  & h1 {
-    font-size: 28px;
-    font-weight: 700;
-    margin: 28px 0 12px;
-    letter-spacing: -0.015em;
-  }
-  & h2 {
-    font-size: 22px;
-    font-weight: 700;
-    margin: 24px 0 10px;
-    letter-spacing: -0.01em;
-  }
-  & h3 {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 20px 0 8px;
-  }
+    :global(h1) {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 28px 0 12px;
+      letter-spacing: -0.015em;
+    }
+    :global(h2) {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 24px 0 10px;
+      letter-spacing: -0.01em;
+    }
+    :global(h3) {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 20px 0 8px;
+    }
 
-  & blockquote {
-    margin: 16px 0;
-    padding: 2px 0 2px 18px;
-    // The global `blockquote` rule uses `border: 1px dashed
-    // !important`. The !important applies to all four sides; we
-    // must mark our overrides !important to win the cascade.
-    border-top: none !important;
-    border-right: none !important;
-    border-bottom: none !important;
-    border-left: 3px solid var(--border-strong, #d0d0d0) !important;
-    color: var(--muted, #767676);
-    // Clear the rest of the global blockquote rule. background is
-    // not !important so higher specificity from the nested selector
-    // wins. line-height needs an explicit `inherit` because the
-    // global rule sets it directly on `blockquote` (specificity
-    // 0,0,1) and would otherwise beat host inheritance.
-    background: none;
-    font-size: inherit;
-    line-height: inherit;
-  }
+    :global(blockquote) {
+      margin: 16px 0;
+      padding: 2px 0 2px 18px;
+      // The global `blockquote` rule uses `border: 1px dashed
+      // !important`. The !important applies to all four sides; we
+      // must mark our overrides !important to win the cascade.
+      border-top: none !important;
+      border-right: none !important;
+      border-bottom: none !important;
+      border-left: 3px solid var(--border-strong, #d0d0d0) !important;
+      color: var(--muted, #767676);
+      // Clear the rest of the global blockquote rule. background is
+      // not !important so higher specificity from the nested selector
+      // wins. line-height needs an explicit `inherit` because the
+      // global rule sets it directly on `blockquote` (specificity
+      // 0,0,1) and would otherwise beat host inheritance.
+      background: none;
+      font-size: inherit;
+      line-height: inherit;
+    }
 
-  & ul,
-  & ol {
-    margin: 0 0 16px;
-    padding-left: 24px;
-    list-style-position: outside;
-  }
-  & li { margin: 4px 0; padding: 0; }
+    :global(ul),
+    :global(ol) {
+      margin: 0 0 16px;
+      padding-left: 24px;
+      list-style-position: outside;
+    }
+    :global(li) { margin: 4px 0; padding: 0; }
 
-  & img,
-  & picture {
-    max-width: 100%;
-    height: auto;
-    display: block;
-    margin: 16px auto;
+    :global(img),
+    :global(picture) {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 16px auto;
+    }
+  } @else {
+    & p { margin: 0 0 16px; }
+
+    & h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 28px 0 12px;
+      letter-spacing: -0.015em;
+    }
+    & h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 24px 0 10px;
+      letter-spacing: -0.01em;
+    }
+    & h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 20px 0 8px;
+    }
+
+    & blockquote {
+      margin: 16px 0;
+      padding: 2px 0 2px 18px;
+      // The global `blockquote` rule uses `border: 1px dashed
+      // !important`. The !important applies to all four sides; we
+      // must mark our overrides !important to win the cascade.
+      border-top: none !important;
+      border-right: none !important;
+      border-bottom: none !important;
+      border-left: 3px solid var(--border-strong, #d0d0d0) !important;
+      color: var(--muted, #767676);
+      // Clear the rest of the global blockquote rule. background is
+      // not !important so higher specificity from the nested selector
+      // wins. line-height needs an explicit `inherit` because the
+      // global rule sets it directly on `blockquote` (specificity
+      // 0,0,1) and would otherwise beat host inheritance.
+      background: none;
+      font-size: inherit;
+      line-height: inherit;
+    }
+
+    & ul,
+    & ol {
+      margin: 0 0 16px;
+      padding-left: 24px;
+      list-style-position: outside;
+    }
+    & li { margin: 4px 0; padding: 0; }
+
+    & img,
+    & picture {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 16px auto;
+    }
   }
 }

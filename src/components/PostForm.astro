@@ -354,7 +354,13 @@ const tagsChipText = formatTagsChip(initialTagNames);
     outline: none;
     color: var(--fg);
     box-sizing: border-box;
-    @include post-typography;
+    // Pass $astro: true so the mixin emits :global(p), :global(h1), etc.
+    // instead of & p, & h1. Astro's scoped-CSS pipeline appends
+    // [data-astro-cid-*] to every element-name token NOT already inside a
+    // :global() wrapper; Crepe-injected DOM has no scope attribute, so the
+    // unguarded descendant rules silently fail at runtime. See the mixin
+    // partial for the full explanation.
+    @include post-typography($astro: true);
   }
   .milkdown-host :global(.ProseMirror a) {
     color: var(--fg);
@@ -409,7 +415,8 @@ const tagsChipText = formatTagsChip(initialTagNames);
     max-width: 720px; margin: 0 auto; width: 100%;
     color: var(--fg);
     overflow-y: auto;
-    @include post-typography;
+    // $astro: true — see .ProseMirror block above and the mixin partial.
+    @include post-typography($astro: true);
 
     // The preview surface renders the same HTML pipeline as the
     // published post, including `marked.parse` -> sanitize. The

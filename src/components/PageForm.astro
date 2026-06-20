@@ -111,7 +111,8 @@ const { siteId, slug, pageTitle, body, bodyImages } = Astro.props;
     outline: none;
     color: var(--fg);
     box-sizing: border-box;
-    @include post-typography;
+    // $astro: true — see PostForm's .ProseMirror block and the mixin partial.
+    @include post-typography($astro: true);
   }
   .milkdown-host :global(.ProseMirror a) {
     color: var(--fg);
