@@ -1,0 +1,78 @@
+// Canonical typographic system for rendered markdown body content.
+//
+// Consumed by three surfaces so authors and readers see the same
+// rhythm: published Post/Page (`article .post`), the Crepe editor
+// (`.milkdown-host .ProseMirror`), and the in-form Preview pane
+// (`.preview-area`). Each consumer @includes this mixin under the
+// scope selector that wraps their rendered content.
+//
+// Rules are emitted as nested `&` selectors. Specificity matters:
+// when included at `article .post { @include post-typography; }`,
+// the nested `& p` compiles to `article .post p` (0,2,1), which
+// beats both the soon-deleted `article p` (0,1,1) and any bare
+// global `p` rule (0,0,1). DO NOT change `&` to bare selectors --
+// that would re-introduce the leakage problem this file exists to
+// eliminate.
+//
+// `color` is left to the host scope: editor + preview set
+// `color: var(--fg)` at their host selector; published inherits
+// from `body { color: #555 }`. The mixin does not touch `color`.
+//
+// Out of scope (intentional drift between editor and published):
+// links (`a`), inline `code`, `pre`, and `hr`. Convergence here
+// would expand scope per the design doc.
+
+@mixin post-typography {
+  font-size: 17px;
+  line-height: 1.7;
+
+  & p { margin: 0 0 16px; }
+
+  & h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 28px 0 12px;
+    letter-spacing: -0.015em;
+  }
+  & h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 24px 0 10px;
+    letter-spacing: -0.01em;
+  }
+  & h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 20px 0 8px;
+  }
+
+  & blockquote {
+    margin: 16px 0;
+    padding: 2px 0 2px 18px;
+    border-left: 3px solid var(--border-strong, #d0d0d0);
+    color: var(--muted, #767676);
+    // Explicitly clear the global blockquote rule's properties so
+    // the published surface doesn't carry over the dashed-box look.
+    background: none;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+    font-size: inherit;
+  }
+
+  & ul,
+  & ol {
+    margin: 0 0 16px;
+    padding-left: 24px;
+    list-style-position: outside;
+  }
+  & li { margin: 4px 0; padding: 0; }
+
+  & img,
+  & picture {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 16px auto;
+  }
+}
