@@ -49,15 +49,22 @@
   & blockquote {
     margin: 16px 0;
     padding: 2px 0 2px 18px;
-    border-left: 3px solid var(--border-strong, #d0d0d0);
+    // The global `blockquote` rule uses `border: 1px dashed
+    // !important`. The !important applies to all four sides; we
+    // must mark our overrides !important to win the cascade.
+    border-top: none !important;
+    border-right: none !important;
+    border-bottom: none !important;
+    border-left: 3px solid var(--border-strong, #d0d0d0) !important;
     color: var(--muted, #767676);
-    // Explicitly clear the global blockquote rule's properties so
-    // the published surface doesn't carry over the dashed-box look.
+    // Clear the rest of the global blockquote rule. background is
+    // not !important so higher specificity from the nested selector
+    // wins. line-height needs an explicit `inherit` because the
+    // global rule sets it directly on `blockquote` (specificity
+    // 0,0,1) and would otherwise beat host inheritance.
     background: none;
-    border-top: none;
-    border-right: none;
-    border-bottom: none;
     font-size: inherit;
+    line-height: inherit;
   }
 
   & ul,
