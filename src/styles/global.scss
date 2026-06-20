@@ -3,6 +3,7 @@
 @use "cards";
 @use "tags";
 @use "gallery";
+@use "post-content" as *;
 
 /*------------------------------------
  * sext-vi
@@ -106,7 +107,6 @@ ul.listing {
 
 article {
   margin: 2em 0;
-  p { padding: .7em 0; }
   .title {
     font-family: #{$label-font};
     a { color: #777; &:hover { color: #dd1144; } }
@@ -130,7 +130,7 @@ article {
     .tags a { color: #767676; padding: .25em; &:hover { color: #dd1144; } }
   }
 
-  .post { img { max-width: 100%; height: auto; display: block; margin: .5em auto; } }
+  .post { @include post-typography; }
   // Lightbox affordance: body images carry data-pswp-src when the
   // PhotoSwipe handler will open them in a lightbox. Show the
   // zoom-in cursor so users know the click does something.
