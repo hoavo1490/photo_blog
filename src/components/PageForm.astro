@@ -52,7 +52,9 @@ const { siteId, slug, pageTitle, body, bodyImages } = Astro.props;
   </div>
 </form>
 
-<style>
+<style lang="scss">
+@use "../styles/post-content" as *;
+
   #page-form {
     display: flex;
     flex-direction: column;
@@ -107,15 +109,10 @@ const { siteId, slug, pageTitle, body, bodyImages } = Astro.props;
     padding: 32px 20px 96px;
     min-height: 100%;
     outline: none;
-    font-size: 17px;
-    line-height: 1.7;
     color: var(--fg);
     box-sizing: border-box;
+    @include post-typography;
   }
-  .milkdown-host :global(.ProseMirror p) { margin: 0 0 16px; }
-  .milkdown-host :global(.ProseMirror h1) { font-size: 28px; font-weight: 700; margin: 28px 0 12px; letter-spacing: -0.015em; }
-  .milkdown-host :global(.ProseMirror h2) { font-size: 22px; font-weight: 700; margin: 24px 0 10px; }
-  .milkdown-host :global(.ProseMirror h3) { font-size: 18px; font-weight: 600; margin: 20px 0 8px; }
   .milkdown-host :global(.ProseMirror a) {
     color: var(--fg);
     text-decoration: underline;
