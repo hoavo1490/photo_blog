@@ -47,7 +47,6 @@ const years = [...byYear.entries()].sort((a, b) => b[0] - a[0]);
 // og:image = latest post's cover so social shares of the home page get
 // a real image preview instead of a blank card.
 const latestCover = cards[0]?.cover;
-const latestDesc = cards[0]?.desc;
 const latest = cards[0];
 // Kept in lock-step with PostCard.astro's sizesAttr so the preload
 // and the eventual <picture> pick the same variant -- otherwise the
@@ -69,9 +68,18 @@ const lcpAvifSrcset = latest && latest.r2Key && latest.hasAvif && latest.variant
       .map((w) => `${variantUrlForKey(latest.r2Key!, w, env_).replace(/\.jpg$/, '.avif')} ${w}w`)
       .join(', ')
   : undefined;
+// Stable homepage title + description. Previously the description
+// pulled from `latestDesc` (first paragraph of the most recent post),
+// which changed every publish and tripped Google's "is this a real
+// description?" heuristic -- the SERP snippet started auto-stitching
+// from random post bodies. The hardcoded copy below tells Google what
+// the SITE is about, so the snippet stays consistent across publishes.
+const HOME_TITLE = 'photo journal & notes by Rio';
+const HOME_DESCRIPTION = 'Photo journal & notes by Rio — travel, music, and everyday moments from Vietnam and beyond.';
 ---
 <BaseLayout
-  description={latestDesc || undefined}
+  title={HOME_TITLE}
+  description={HOME_DESCRIPTION}
   image={latestCover}
   lcpImage={latest ? {
     src: latest.cover,
@@ -84,7 +92,7 @@ const lcpAvifSrcset = latest && latest.r2Key && latest.hasAvif && latest.variant
     buildWebSiteJsonLd({
       siteUrl: resolveCanonicalOrigin(tenant, Astro.url),
       siteName: tenant.name ?? defaultSiteName,
-      description: latestDesc || 'Photo journal by Rio.',
+      description: HOME_DESCRIPTION,
       inLanguage: 'vi-VN',
     }),
     buildPersonJsonLd(resolveCanonicalOrigin(tenant, Astro.url), defaultAuthorProfile),
