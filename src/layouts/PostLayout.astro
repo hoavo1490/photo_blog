@@ -95,17 +95,17 @@ const jsonLd = asGraph([blogPosting, breadcrumb]);
   lcpImage={firstBodyImg ?? undefined}
 >
   <article>
-    {/* Visible breadcrumbs mirror the BreadcrumbList JSON-LD above.
-        Tiny font, muted color so the post title still owns the eye --
-        the trail is here for crawlers, screen readers, and the rare
-        reader who wants a way back up the date tree. */}
+    {/* Visible breadcrumb trail. The post title is intentionally NOT
+        repeated here -- the <h1> below renders it loudly, so showing
+        it twice in the same column reads as duplication. The full
+        three-level crumb (Home > Year > Title) stays in the
+        BreadcrumbList JSON-LD so Google still gets the rich-result
+        signal for SERP breadcrumb display. */}
     {post.publishedAt && (
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a href="/">{siteName}</a>
         <span aria-hidden="true">›</span>
         <a href={`/archive#${post.publishedAt.getUTCFullYear()}`}>{post.publishedAt.getUTCFullYear()}</a>
-        <span aria-hidden="true">›</span>
-        <span class="breadcrumb-current">{post.title}</span>
       </nav>
     )}
     <section class="title"><h1>{post.title}</h1></section>
