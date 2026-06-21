@@ -145,42 +145,51 @@ export async function setPostTags(driver: SqlDriver, input: SetPostTagsInput): P
     return;
   }
 
-  // Atomic set-difference rewrite of post_tags, expressed without
-  // unnest(): D1/SQLite doesn't have it, and the older single-CTE form
-  // was unrunnable there. Each VALUES row supplies (site_id, slug, name);
-  // the parameter list is laid out as
-  //   [siteId, slug1, name1, slug2, name2, ..., postId]
-  // so the trailing postId index is `2 * slugs.length + 2`.
+  // Three sequential statements. The previous single-CTE form was a
+  // Postgres-only optimization; D1/SQLite refuses to parse `INSERT ...
+  // ON CONFLICT ... RETURNING` inside a CTE (syntax error at the
+  // INSERT keyword), so we run upsert / insert-pairs / delete-stale
+  // separately.
   //
-  // Postgres and SQLite both accept `INSERT ... VALUES (a,b,c), (a,d,e)
-  // ON CONFLICT (...) DO UPDATE ... RETURNING id`, which keeps the
-  // single-statement atomicity guarantee the original implementation
-  // relied on.
-  const valuesSql = slugs
+  // ORDER MATTERS for partial-failure semantics: INSERTs come before
+  // DELETE so a mid-flight failure leaves the post with extra stale
+  // tag rows (cleaned up on the next save) rather than tagless. Test
+  // tags.integration.test.ts:105 enforces this contract.
+  //
+  // Build VALUES rows for the tag upsert; the postId is bound separately.
+  const tagValues = slugs
     .map((_, i) => `($1, $${2 + i * 2}, $${3 + i * 2})`)
     .join(', ');
-  const postIdParam = `$${2 + slugs.length * 2}`;
   const tagParams: unknown[] = [input.siteId];
   for (let i = 0; i < slugs.length; i++) {
     tagParams.push(slugs[i], names[i]);
   }
-  tagParams.push(input.postId);
 
-  await driver.exec(
-    `WITH
-       desired AS (
-         INSERT INTO tags (site_id, slug, name)
-         VALUES ${valuesSql}
-         ON CONFLICT (site_id, slug) DO UPDATE SET name = excluded.name
-         RETURNING id
-       ),
-       deleted AS (
-         DELETE FROM post_tags
-         WHERE post_id = ${postIdParam} AND tag_id NOT IN (SELECT id FROM desired)
-       )
-     INSERT INTO post_tags (post_id, tag_id)
-     SELECT ${postIdParam}, id FROM desired
-     ON CONFLICT (post_id, tag_id) DO NOTHING`,
+  // 1. Upsert tags; capture each row's id.
+  const upserted = await driver.query<{ id: string }>(
+    `INSERT INTO tags (site_id, slug, name) VALUES ${tagValues}
+     ON CONFLICT (site_id, slug) DO UPDATE SET name = excluded.name
+     RETURNING id`,
     tagParams,
+  );
+  const tagIds = upserted.map((r) => r.id);
+
+  // 2. Insert the desired post_tags pairs (ON CONFLICT DO NOTHING so
+  //    re-runs are idempotent). Doing this BEFORE the DELETE means a
+  //    failure here leaves the previous tag set intact.
+  const joinValues = tagIds.map((_, i) => `($1, $${i + 2})`).join(', ');
+  await driver.exec(
+    `INSERT INTO post_tags (post_id, tag_id) VALUES ${joinValues}
+     ON CONFLICT (post_id, tag_id) DO NOTHING`,
+    [input.postId, ...tagIds],
+  );
+
+  // 3. Delete post_tags rows whose tag_id isn't in the desired set.
+  //    Failure here at worst leaves stale extras -- safer than going
+  //    tagless. Next save naturally cleans them up.
+  const placeholders = tagIds.map((_, i) => `$${i + 2}`).join(', ');
+  await driver.exec(
+    `DELETE FROM post_tags WHERE post_id = $1 AND tag_id NOT IN (${placeholders})`,
+    [input.postId, ...tagIds],
   );
 }
