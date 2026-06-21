@@ -12,9 +12,9 @@
   "r2_buckets": [
     { "binding": "PHOTOS", "bucket_name": "riovv-media" }
   ],
-  "d1_databases": [
-    { "binding": "DB", "database_name": "photoblog", "database_id": "2ec7c36a-4c0c-4989-ab84-cc1228e31cb9" }
-  ],
+  // No D1 binding: production runs on Neon (DATABASE_URL secret). The
+  // middleware's createDriver() falls through to the Neon driver when
+  // env.DB is absent. Local dev with PGLite is the third path.
   // Non-sensitive plaintext vars live here so they survive `wrangler
   // deploy` (which removes any plaintext var not in this file). Sensitive
   // values stay in the dashboard as Secrets.
