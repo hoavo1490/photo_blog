@@ -6,8 +6,11 @@ import type { Row, SqlDriver } from './driver';
 // driver-agnostic.
 //
 // Translations applied:
-//   $1, $2, ...  →  ?  (D1 uses positional ? not $N)
+//   $1, $2, ...   →  ?  (D1 uses positional ? not $N)
 //   ::type        →  (stripped — no cast operators in SQLite)
+//   NULLS LAST/FIRST → (stripped — SQLite sorts NULLs first asc / last desc
+//                       by default; matches Postgres NULLS LAST for our
+//                       DESC-by-timestamp queries)
 //   now()         →  strftime('%Y-%m-%dT%H:%M:%fZ','now')
 //   to_char(col AT TIME ZONE 'UTC', 'YYYY/MM/DD')  →  strftime('%Y/%m/%d', col)
 //
@@ -19,6 +22,7 @@ function translateSql(sql: string): string {
   return sql
     .replace(/\$\d+/g, '?')
     .replace(/::[a-zA-Z_][\w[\]]*/g, '')
+    .replace(/\s+NULLS\s+(LAST|FIRST)\b/gi, '')
     .replace(/\bnow\(\)/gi, "strftime('%Y-%m-%dT%H:%M:%fZ','now')")
     .replace(/to_char\(\s*(\w+)\s+AT\s+TIME\s+ZONE\s+'UTC',\s*'YYYY'\s*\)/gi, "strftime('%Y',$1)")
     .replace(/to_char\(\s*(\w+)\s+AT\s+TIME\s+ZONE\s+'UTC',\s*'MM'\s*\)/gi, "strftime('%m',$1)")

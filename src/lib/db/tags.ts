@@ -139,33 +139,48 @@ export async function setPostTags(driver: SqlDriver, input: SetPostTagsInput): P
     names.push(name);
   }
 
-  // Rewrite post_tags atomically in a single statement. Each Postgres
-  // statement is its own transaction, so this is safe across both the
-  // Neon HTTP driver (one round-trip per statement) and the in-process
-  // PGLite driver. A mid-flight failure can no longer leave the post
-  // tagless.
+  // No tags? Just wipe the join rows; nothing to upsert.
+  if (slugs.length === 0) {
+    await driver.exec(`DELETE FROM post_tags WHERE post_id = $1`, [input.postId]);
+    return;
+  }
+
+  // Atomic set-difference rewrite of post_tags, expressed without
+  // unnest(): D1/SQLite doesn't have it, and the older single-CTE form
+  // was unrunnable there. Each VALUES row supplies (site_id, slug, name);
+  // the parameter list is laid out as
+  //   [siteId, slug1, name1, slug2, name2, ..., postId]
+  // so the trailing postId index is `2 * slugs.length + 2`.
   //
-  // Implementation note: a single statement can't both DELETE and INSERT
-  // the same (post_id, tag_id) pair -- the two CTEs share a snapshot and
-  // a UNIQUE-violation error or undefined behavior would result. So we
-  // compute the set difference instead: delete pairs that are no longer
-  // desired, then insert pairs that are new. Same end state as the old
-  // "wipe and reinsert" approach.
+  // Postgres and SQLite both accept `INSERT ... VALUES (a,b,c), (a,d,e)
+  // ON CONFLICT (...) DO UPDATE ... RETURNING id`, which keeps the
+  // single-statement atomicity guarantee the original implementation
+  // relied on.
+  const valuesSql = slugs
+    .map((_, i) => `($1, $${2 + i * 2}, $${3 + i * 2})`)
+    .join(', ');
+  const postIdParam = `$${2 + slugs.length * 2}`;
+  const tagParams: unknown[] = [input.siteId];
+  for (let i = 0; i < slugs.length; i++) {
+    tagParams.push(slugs[i], names[i]);
+  }
+  tagParams.push(input.postId);
+
   await driver.exec(
     `WITH
        desired AS (
          INSERT INTO tags (site_id, slug, name)
-         SELECT $1, t.slug, t.name FROM unnest($2::text[], $3::text[]) AS t(slug, name)
-         ON CONFLICT (site_id, slug) DO UPDATE SET name = tags.name
+         VALUES ${valuesSql}
+         ON CONFLICT (site_id, slug) DO UPDATE SET name = excluded.name
          RETURNING id
        ),
        deleted AS (
          DELETE FROM post_tags
-         WHERE post_id = $4 AND tag_id NOT IN (SELECT id FROM desired)
+         WHERE post_id = ${postIdParam} AND tag_id NOT IN (SELECT id FROM desired)
        )
      INSERT INTO post_tags (post_id, tag_id)
-     SELECT $4, id FROM desired
+     SELECT ${postIdParam}, id FROM desired
      ON CONFLICT (post_id, tag_id) DO NOTHING`,
-    [input.siteId, slugs, names, input.postId],
+    tagParams,
   );
 }
