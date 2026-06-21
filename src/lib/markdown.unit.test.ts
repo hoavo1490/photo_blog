@@ -294,11 +294,21 @@ describe('sanitizePostHtml', () => {
     expect(clean).toContain('<pre>');
   });
 
-  it('strips <iframe> and <style>', () => {
+  it('strips <iframe> from untrusted hosts and <style> entirely', () => {
     const dirty = `<iframe src="https://evil"></iframe><style>p{display:none}</style><p>ok</p>`;
     const clean = sanitizePostHtml(dirty);
-    expect(clean).not.toContain('<iframe');
+    // iframe element survives only when src is in ALLOWED_IFRAME_HOSTNAMES
+    // (see lib/embeds.ts); evil host strips the src so the iframe becomes
+    // an empty inert element. We assert the dangerous attribute is gone.
+    expect(clean).not.toContain('src="https://evil"');
     expect(clean).not.toContain('<style');
     expect(clean).toContain('<p>ok</p>');
+  });
+
+  it('keeps iframes from allowed embed hosts (YouTube/Spotify/Vimeo)', () => {
+    const dirty = `<iframe src="https://www.youtube-nocookie.com/embed/abc"></iframe>`;
+    const clean = sanitizePostHtml(dirty);
+    expect(clean).toContain('iframe');
+    expect(clean).toContain('youtube-nocookie.com');
   });
 });

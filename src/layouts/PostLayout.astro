@@ -4,13 +4,13 @@ import BaseLayout from './BaseLayout.astro';
 import { coverUrlFor, buildBodyImageResolver } from '../lib/render';
 import * as tagsRepo from '../lib/db/tags';
 import * as postsRepo from '../lib/db/posts';
-import { firstParagraph, firstBodyImageInfo, rewriteImageTokens } from '../lib/markdown';
+import { firstParagraph, firstBodyImageInfo, rewriteImageTokens, renderPostHtml } from '../lib/markdown';
 import { rewriteEmbeds } from '../lib/embeds';
 import { sanitizePostHtml } from '../lib/sanitize-html';
 import type { Post } from '../lib/db/posts';
 import { postUrl } from '../lib/post-url';
-import { marked } from 'marked';
 import { defaultAuthor, defaultSiteName } from '../data/nav';
+import { resolveCanonicalOrigin, buildPostBreadcrumbJsonLd, asGraph } from '../lib/seo';
 
 interface Props { post: Post }
 const { post } = Astro.props;
@@ -36,33 +36,45 @@ const nextUrl = adjacent.next?.publishedAt
   ? postUrl({ publishedAt: adjacent.next.publishedAt, slug: adjacent.next.slug })
   : null;
 const rewritten = rewriteEmbeds(rewriteImageTokens(post.body, bodyResolver));
-// marked.parse() passes raw HTML through. Sanitize before set:html so
-// hostile authors can't XSS readers.
-const rendered = sanitizePostHtml(await marked.parse(rewritten));
+// renderPostHtml shifts body headings down one level so the post title
+// remains the page's only H1. Output is sanitized before set:html so a
+// hostile author can't XSS readers.
+const rendered = sanitizePostHtml(await renderPostHtml(rewritten));
 const firstBodyImg = firstBodyImageInfo(post.body, bodyResolver);
 const dateStr = post.publishedAt ? post.publishedAt.toISOString().slice(0, 10) : '';
 const tagNames = postTags.map((t) => t.name);
 const description = post.description ?? firstParagraph(post.body) ?? undefined;
 
-const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
+const siteOrigin = resolveCanonicalOrigin(tenant, Astro.url);
+const canonical = `${siteOrigin}${Astro.url.pathname}`;
 const siteName = tenant.name ?? defaultSiteName;
 
 // BlogPosting JSON-LD enables Google rich results (article cards in
 // search). Keep it minimal; only emit fields we actually have.
-const jsonLd: Record<string, unknown> = {
-  '@context': 'https://schema.org',
+const blogPosting: Record<string, unknown> = {
   '@type': 'BlogPosting',
   headline: post.title,
   url: canonical,
   datePublished: post.publishedAt?.toISOString(),
   dateModified: post.updatedAt.toISOString(),
-  author: { '@type': 'Person', name: defaultAuthor },
+  author: { '@type': 'Person', '@id': `${siteOrigin}#author`, name: defaultAuthor },
   publisher: { '@type': 'Organization', name: siteName },
   mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
 };
-if (description) jsonLd.description = description;
-if (cover) jsonLd.image = cover;
-if (tagNames.length) jsonLd.keywords = tagNames.join(', ');
+if (description) blogPosting.description = description;
+if (cover) blogPosting.image = cover;
+if (tagNames.length) blogPosting.keywords = tagNames.join(', ');
+
+// BreadcrumbList: surfaces a clickable Home › Year › Title trail in
+// mobile SERP results (replaces the URL in the snippet, lifts CTR).
+const breadcrumb = buildPostBreadcrumbJsonLd({
+  siteUrl: siteOrigin,
+  year: post.publishedAt ? String(post.publishedAt.getUTCFullYear()) : 'archive',
+  postTitle: post.title,
+  postUrl: canonical,
+});
+
+const jsonLd = asGraph([blogPosting, breadcrumb]);
 ---
 <BaseLayout
   title={post.title}
@@ -76,6 +88,19 @@ if (tagNames.length) jsonLd.keywords = tagNames.join(', ');
   lcpImage={firstBodyImg ?? undefined}
 >
   <article>
+    {/* Visible breadcrumbs mirror the BreadcrumbList JSON-LD above.
+        Tiny font, muted color so the post title still owns the eye --
+        the trail is here for crawlers, screen readers, and the rare
+        reader who wants a way back up the date tree. */}
+    {post.publishedAt && (
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="/">{siteName}</a>
+        <span aria-hidden="true">›</span>
+        <a href={`/archive#${post.publishedAt.getUTCFullYear()}`}>{post.publishedAt.getUTCFullYear()}</a>
+        <span aria-hidden="true">›</span>
+        <span class="breadcrumb-current">{post.title}</span>
+      </nav>
+    )}
     <section class="title"><h1>{post.title}</h1></section>
     <section class="meta">
       <span class="time">

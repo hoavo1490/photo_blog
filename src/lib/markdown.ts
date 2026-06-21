@@ -7,6 +7,8 @@
 // publish pipeline calls `rewriteImageTokens` with a resolver that maps
 // id -> R2 public URL. Real http(s) image URLs are passed through.
 
+import { Marked } from 'marked';
+
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const IMAGE_TOKEN_RE = new RegExp(`!\\[([^\\]]*)\\]\\(image:(${UUID})\\)`, 'g');
 const IMAGE_URL_RE = /!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/;
@@ -70,13 +72,38 @@ export function firstParagraph(body: string, maxChars = 200): string | null {
   }
 
   if (paraLines.length === 0) return null;
-  const text = paraLines.join(' ');
+  const text = stripMarkdown(paraLines.join(' '));
   if (text.length <= maxChars) return text;
 
   // Walk back from maxChars to the last space so we don't split a word.
   const slice = text.slice(0, maxChars);
   const lastSpace = slice.lastIndexOf(' ');
   return lastSpace > 0 ? slice.slice(0, lastSpace) : slice;
+}
+
+/** Strip inline markdown formatting from a paragraph so it can be safely
+ *  used as an SEO meta description / OG description / RSS blurb. Removes
+ *  emphasis runs, inline code, link syntax (keeps the visible text), and
+ *  any stray image tokens. Block-level constructs are already filtered
+ *  by firstParagraph before this runs. */
+export function stripMarkdown(s: string): string {
+  let out = s;
+  // Image tokens (in case any leaked past the paragraph filter).
+  out = out.replace(/!\[[^\]]*\]\([^)]*\)/g, '');
+  // Links: [text](url) -> text
+  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
+  // Inline code: `code` -> code
+  out = out.replace(/`([^`]+)`/g, '$1');
+  // Bold: **text** / __text__ -> text
+  out = out.replace(/\*\*([^*]+)\*\*/g, '$1');
+  out = out.replace(/__([^_]+)__/g, '$1');
+  // Italic: *text* / _text_ -> text. Boundary-guarded so foo_bar_baz stays intact.
+  out = out.replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, '$1$2');
+  out = out.replace(/(^|[^_\w])_([^_\n]+)_(?!\w)/g, '$1$2');
+  // Backslash escapes: \* -> *
+  out = out.replace(/\\([\\`*_[\]])/g, '$1');
+  // Collapse double spaces left by removals.
+  return out.replace(/\s+/g, ' ').trim();
 }
 
 export interface ResolvedImage {
@@ -234,4 +261,31 @@ export function firstBodyImageInfo(
     };
   }
   return null;
+}
+
+// ─── Renderer: a Marked instance with shifted heading levels ────────
+// The post page already has a single H1 (the post title in PostLayout).
+// Any `#` in the body would create a second H1, splitting topical
+// authority for SEO and breaking the document outline for assistive
+// tech. This renderer shifts every body heading down one level: # → h2,
+// ## → h3, ..., h5 → h6. h6 stays at h6 since there's no h7.
+//
+// Uses a fresh `Marked` instance (rather than mutating the global one
+// via `marked.use`) so unit tests of the shared default `marked` keep
+// their unshifted behavior.
+const postMarked = new Marked();
+postMarked.use({
+  renderer: {
+    heading(token) {
+      const text = this.parser.parseInline(token.tokens);
+      const shifted = Math.min(6, token.depth + 1);
+      return `<h${shifted}>${text}</h${shifted}>\n`;
+    },
+  },
+});
+
+/** Render markdown intended for an article body, with heading levels
+ *  shifted down by one so the post title remains the page's only H1. */
+export async function renderPostHtml(md: string): Promise<string> {
+  return postMarked.parse(md);
 }

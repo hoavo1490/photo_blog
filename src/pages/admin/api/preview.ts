@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
-import { marked } from 'marked';
 import type { SqlDriver } from '../../../lib/db/driver';
 import { renderPostBody } from '../../../lib/render';
+import { renderPostHtml } from '../../../lib/markdown';
 import { rewriteEmbeds } from '../../../lib/embeds';
 import { sanitizePostHtml } from '../../../lib/sanitize-html';
 
@@ -37,7 +37,7 @@ export const POST: APIRoute = async (ctx) => {
   // Mirror the public path: sanitize before returning HTML so the
   // editor preview matches what publishes (and isn't an XSS vector
   // against admins either).
-  const html = sanitizePostHtml(await marked.parse(rewritten));
+  const html = sanitizePostHtml(await renderPostHtml(rewritten));
   return new Response(html, {
     headers: { 'content-type': 'text/html; charset=utf-8' },
   });

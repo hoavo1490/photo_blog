@@ -3,10 +3,9 @@ import { env } from 'cloudflare:workers';
 import PageLayout from '../layouts/PageLayout.astro';
 import * as pages from '../lib/db/pages';
 import { buildImageResolver } from '../lib/render';
-import { rewriteImageTokens } from '../lib/markdown';
+import { rewriteImageTokens, renderPostHtml } from '../lib/markdown';
 import { rewriteEmbeds } from '../lib/embeds';
 import { sanitizePostHtml } from '../lib/sanitize-html';
-import { marked } from 'marked';
 
 const driver = Astro.locals.db!;
 const tenant = Astro.locals.tenant!;
@@ -25,7 +24,7 @@ for (const m of rawBody.matchAll(/\(image:([0-9a-f-]{36})\)/g)) tokenIds.push(m[
 const resolver = await buildImageResolver(driver, tenant.id, tokenIds, env_);
 const rewritten = rewriteEmbeds(rewriteImageTokens(rawBody, resolver));
 const rendered = rawBody.trim()
-  ? sanitizePostHtml(await marked.parse(rewritten))
+  ? sanitizePostHtml(await renderPostHtml(rewritten))
   : '<p>—</p>';
 ---
 <PageLayout title="about" description="About Rio.">

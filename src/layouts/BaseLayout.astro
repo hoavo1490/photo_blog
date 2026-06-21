@@ -3,6 +3,7 @@ import { ClientRouter } from 'astro:transitions';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import { defaultSiteName, defaultAuthor } from '../data/nav';
+import { resolveCanonicalUrl } from '../lib/seo';
 import '../styles/global.scss';
 
 // SEO meta is centralized here so per-page props translate cleanly into
@@ -52,10 +53,11 @@ const pageTitle = title ? `${title} — ${siteName}` : siteName;
 const fallbackDescription = 'Photo journal by Rio.';
 const desc = description ?? fallbackDescription;
 
-// Canonical = origin + pathname (no query string). Tracks the actually
-// served host so workers.dev and the eventual custom domain each get a
-// truthful canonical without lying to crawlers.
-const canonical = `${Astro.url.origin}${Astro.url.pathname}`;
+// Canonical pins to the tenant's customDomain when set, so workers.dev
+// preview traffic doesn't end up indexed alongside the production
+// hostname. Falls back to the request origin for tenants without a
+// custom domain yet.
+const canonical = resolveCanonicalUrl(Astro.locals.tenant ?? null, Astro.url);
 ---
 <!DOCTYPE html>
 <html lang="vi">

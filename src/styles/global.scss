@@ -107,6 +107,28 @@ ul.listing {
 
 article {
   margin: 2em 0;
+
+  // Breadcrumb sits above the title in a small muted row. Decorative
+  // chevrons are aria-hidden in the markup; screen readers walk the
+  // <nav aria-label="Breadcrumb"> as an ordered link list.
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 6px;
+    a { color: #767676; &:hover { color: #dd1144; } }
+    .breadcrumb-current {
+      color: #767676;
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
   .title {
     font-family: #{$label-font};
     a { color: #777; &:hover { color: #dd1144; } }

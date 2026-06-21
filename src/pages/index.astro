@@ -6,6 +6,8 @@ import * as posts from '../lib/db/posts';
 import { batchCoverImagesFor } from '../lib/render';
 import { firstParagraph } from '../lib/markdown';
 import { variantUrlForKey } from '../lib/r2/images';
+import { resolveCanonicalOrigin, buildWebSiteJsonLd, buildPersonJsonLd, defaultAuthorProfile, asGraph } from '../lib/seo';
+import { defaultSiteName } from '../data/nav';
 
 const tenant = Astro.locals.tenant!;
 const driver = Astro.locals.db!;
@@ -75,6 +77,15 @@ const lcpAvifSrcset = latest && latest.r2Key && latest.hasAvif && latest.variant
     avifSrcset: lcpAvifSrcset,
     sizes: lcpSrcset ? lcpSizes : undefined,
   } : undefined}
+  jsonLd={asGraph([
+    buildWebSiteJsonLd({
+      siteUrl: resolveCanonicalOrigin(tenant, Astro.url),
+      siteName: tenant.name ?? defaultSiteName,
+      description: latestDesc || 'Photo journal by Rio.',
+      inLanguage: 'vi-VN',
+    }),
+    buildPersonJsonLd(resolveCanonicalOrigin(tenant, Astro.url), defaultAuthorProfile),
+  ])}
 >
   <div class="home-wrap">
     <div id="gallery" class="gallery">
