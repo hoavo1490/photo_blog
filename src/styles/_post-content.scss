@@ -44,6 +44,10 @@
   $li:         if($astro, ':global(li)',         '& li');
   $img:        if($astro, ':global(img)',        '& img');
   $picture:    if($astro, ':global(picture)',    '& picture');
+  $embed:      if($astro, ':global(.embed)',     '& .embed');
+  $embedVideo: if($astro, ':global(.embed--video)','& .embed--video');
+  $embedAudio: if($astro, ':global(.embed--audio)','& .embed--audio');
+  $embedIframe:if($astro, ':global(.embed iframe)','& .embed iframe');
 
   font-size: 17px;
   line-height: 1.7;
@@ -100,5 +104,25 @@
     height: auto;
     display: block;
     margin: 16px auto;
+  }
+
+  // Embedded video/audio (YouTube, Spotify, Vimeo). The wrapper carries
+  // the aspect-ratio so the iframe can fill it without inline style and
+  // without layout shift while loading.
+  #{$embed} {
+    display: block;
+    margin: 20px 0;
+    width: 100%;
+    background: #f0f0f0;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  #{$embedVideo} { aspect-ratio: 16 / 9; }
+  #{$embedAudio} { height: 152px; } // Spotify default compact player
+  #{$embedIframe} {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
   }
 }

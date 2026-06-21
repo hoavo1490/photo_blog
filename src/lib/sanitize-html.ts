@@ -11,6 +11,7 @@
 // survives sanitization intact.
 
 import sanitizeHtmlLib from 'sanitize-html';
+import { ALLOWED_IFRAME_HOSTNAMES } from './embeds';
 
 const ALLOWED_TAGS = [
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -21,7 +22,11 @@ const ALLOWED_TAGS = [
   'picture', 'source', 'img',
   'figure', 'figcaption',
   'table', 'thead', 'tbody', 'tr', 'th', 'td',
-  'span',
+  'span', 'div',
+  // iframe is allowed BUT only when the host matches
+  // ALLOWED_IFRAME_HOSTNAMES below -- sanitize-html drops the tag
+  // entirely for any other hostname (or javascript:/data: src).
+  'iframe',
 ];
 
 /** Sanitize HTML rendered from markdown. The allowlist intentionally
@@ -44,6 +49,11 @@ export function sanitizePostHtml(html: string): string {
       code: ['class'],
       pre: ['class'],
       span: ['class'],
+      div: ['class'],
+      iframe: [
+        'src', 'title', 'allow', 'allowfullscreen',
+        'loading', 'referrerpolicy', 'width', 'height',
+      ],
       // Block tags (h1-h6, p, ul, ol, li, blockquote, table cells) have no
       // useful attributes from markdown; leaving them empty keeps the door
       // shut on `style=` smuggling.
@@ -57,5 +67,10 @@ export function sanitizePostHtml(html: string): string {
     allowedSchemesAppliedToAttributes: ['href', 'src', 'srcset'],
     // sanitize-html parses srcset properly when this is on.
     allowProtocolRelative: false,
+    // Iframes pass only when the URL's hostname is in this list. Any
+    // other src drops the entire <iframe> element. This is the actual
+    // security boundary — the rewriteEmbeds step in lib/embeds.ts is
+    // a UX layer above it.
+    allowedIframeHostnames: ALLOWED_IFRAME_HOSTNAMES,
   });
 }

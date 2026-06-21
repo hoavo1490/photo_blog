@@ -5,6 +5,7 @@ import { coverUrlFor, buildBodyImageResolver } from '../lib/render';
 import * as tagsRepo from '../lib/db/tags';
 import * as postsRepo from '../lib/db/posts';
 import { firstParagraph, firstBodyImageInfo, rewriteImageTokens } from '../lib/markdown';
+import { rewriteEmbeds } from '../lib/embeds';
 import { sanitizePostHtml } from '../lib/sanitize-html';
 import type { Post } from '../lib/db/posts';
 import { postUrl } from '../lib/post-url';
@@ -34,7 +35,7 @@ const previousUrl = adjacent.previous?.publishedAt
 const nextUrl = adjacent.next?.publishedAt
   ? postUrl({ publishedAt: adjacent.next.publishedAt, slug: adjacent.next.slug })
   : null;
-const rewritten = rewriteImageTokens(post.body, bodyResolver);
+const rewritten = rewriteEmbeds(rewriteImageTokens(post.body, bodyResolver));
 // marked.parse() passes raw HTML through. Sanitize before set:html so
 // hostile authors can't XSS readers.
 const rendered = sanitizePostHtml(await marked.parse(rewritten));

@@ -4,6 +4,7 @@ import PageLayout from '../layouts/PageLayout.astro';
 import * as pages from '../lib/db/pages';
 import { buildImageResolver } from '../lib/render';
 import { rewriteImageTokens } from '../lib/markdown';
+import { rewriteEmbeds } from '../lib/embeds';
 import { sanitizePostHtml } from '../lib/sanitize-html';
 import { marked } from 'marked';
 
@@ -22,7 +23,7 @@ const rawBody = page?.body ?? '';
 const tokenIds: string[] = [];
 for (const m of rawBody.matchAll(/\(image:([0-9a-f-]{36})\)/g)) tokenIds.push(m[1]);
 const resolver = await buildImageResolver(driver, tenant.id, tokenIds, env_);
-const rewritten = rewriteImageTokens(rawBody, resolver);
+const rewritten = rewriteEmbeds(rewriteImageTokens(rawBody, resolver));
 const rendered = rawBody.trim()
   ? sanitizePostHtml(await marked.parse(rewritten))
   : '<p>—</p>';
