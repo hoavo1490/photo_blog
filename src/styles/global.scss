@@ -119,13 +119,18 @@ article {
       font-weight: 600;
       letter-spacing: -0.005em;
       line-height: 1.3;
+      margin-bottom: 4px;
     }
   }
 
   .meta {
     display: block;
     overflow: auto;
-    margin-top: -.5em;
+    // Date used to pull upward into the title via margin-top: -.5em --
+    // crowded against the headline and left no gap before the body.
+    // Now it sits ~10px below the title with a clear 24px channel to
+    // the first paragraph, so the meta reads as a caption.
+    margin: 6px 0 24px;
     font-size: .9em;
     .tags a { color: #767676; padding: .25em; &:hover { color: #dd1144; } }
   }
