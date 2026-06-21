@@ -89,15 +89,25 @@ export interface WriteToCacheInput {
 /** Persist a response to the cache. Mutates response headers to set
  *  Cache-Control. Returns a clone safe to also pass to the client. */
 export async function writeToCache(cache: Cache, input: WriteToCacheInput): Promise<Response> {
-  const ttl = input.ttlSeconds ?? 60;
+  // 5min TTL on both browser and edge, plus a 1-day stale-while-revalidate
+  // window so visitors keep getting an instant response while the edge
+  // refreshes in the background. The previous 60s TTL was so short that
+  // most requests still hit origin -- the new value lets the edge absorb
+  // traffic spikes (which Google factors into Core Web Vitals scoring)
+  // without making content noticeably stale (posts go live within 5min).
+  const ttl = input.ttlSeconds ?? 300;
   // Only cache 200 HTML/XML/text bodies. Non-success responses get
   // returned untouched.
   if (input.response.status !== 200) return input.response;
 
   const headers = new Headers(input.response.headers);
   // Set both -- caches.default reads Cache-Control too, and downstream
-  // CDNs (in front of the Worker) honor s-maxage.
-  headers.set('cache-control', `public, max-age=${ttl}, s-maxage=${ttl}`);
+  // CDNs (in front of the Worker) honor s-maxage. SWR=86400 lets stale
+  // content serve immediately while a fresh fetch warms in the background.
+  headers.set(
+    'cache-control',
+    `public, max-age=${ttl}, s-maxage=${ttl}, stale-while-revalidate=86400`,
+  );
 
   const cacheable = new Response(input.response.body, {
     status: input.response.status,

@@ -277,3 +277,31 @@ export async function del(
     [args.siteId, args.id],
   );
 }
+
+/** Return up to `limit` other published posts that share the most tags
+ *  with `post`. Useful for "related posts" recommendation strips at the
+ *  end of an article — boosts internal linking + on-site engagement.
+ *  Posts are ranked by overlap count desc, then by recency. */
+export async function findRelatedByTags(
+  driver: SqlDriver,
+  args: { siteId: string; postId: string; limit?: number },
+): Promise<Post[]> {
+  const limit = args.limit ?? 4;
+  const rows = await driver.query<PostRow & { overlap: number | string }>(
+    `SELECT ${SELECT.split(',').map((c) => `p.${c.trim()}`).join(', ')},
+            COUNT(pt.tag_id) AS overlap
+       FROM posts p
+       JOIN post_tags pt ON pt.post_id = p.id
+      WHERE p.site_id = $1
+        AND p.status = 'published'
+        AND p.id <> $2
+        AND pt.tag_id IN (
+              SELECT tag_id FROM post_tags WHERE post_id = $2
+            )
+   GROUP BY p.id
+   ORDER BY overlap DESC, p.published_at DESC NULLS LAST
+      LIMIT $3`,
+    [args.siteId, args.postId, limit],
+  );
+  return rows.map((r) => fromRow(r));
+}

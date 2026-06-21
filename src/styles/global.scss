@@ -195,6 +195,54 @@ article {
   }
   .divider:before { margin-left: -50%; text-align: right; }
   .divider:after { margin-left: 1%; }
+
+  // Related-posts strip: small thumbnails + title. Two columns on
+  // narrow viewports, four on desktop. Internal links here are
+  // the biggest organic SEO lever once a site has 30+ posts.
+  .related {
+    margin: 2em 0;
+  }
+  .related-title {
+    font-family: #{$label-font};
+    font-size: .85em;
+    font-weight: 600;
+    color: #767676;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 12px;
+  }
+  .related-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  @include min-screen(560px) {
+    .related-list { grid-template-columns: repeat(4, 1fr); }
+  }
+  .related-item a {
+    display: block;
+    color: #555;
+    &:hover .related-item-title { color: #dd1144; }
+  }
+  .related-item img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 4px;
+    display: block;
+    margin: 0 0 6px;
+  }
+  .related-item-title {
+    font-size: .85em;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 }
 
 footer {
