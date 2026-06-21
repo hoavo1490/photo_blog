@@ -31,7 +31,7 @@ const { siteId, slug, pageTitle, body, bodyImages } = Astro.props;
     <button type="submit" class="primary publish-btn" id="save-btn">Save</button>
   </header>
 
-  <div id="milkdown-editor" class="milkdown-host"></div>
+  <div id="body-editor" class="editor-host"></div>
   <textarea id="body-area" name="body" rows="14" placeholder="write here…" hidden>{body}</textarea>
 
   <div class="bottom-toolbar" id="bottom-toolbar">
@@ -99,43 +99,34 @@ const { siteId, slug, pageTitle, body, bodyImages } = Astro.props;
   .publish-btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
   .publish-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .milkdown-host {
+  .editor-host {
     flex: 1;
     background: var(--bg-elev);
     overflow-y: auto;
   }
-  .milkdown-host :global(.ProseMirror) {
+  .editor-host :global(.codex-editor) {
     max-width: 720px; margin: 0 auto;
     padding: 32px 20px 96px;
-    min-height: 100%;
-    outline: none;
     color: var(--fg);
     box-sizing: border-box;
-    // $astro: true — see PostForm's .ProseMirror block and the mixin partial.
     @include post-typography($astro: true);
   }
-  .milkdown-host :global(.ProseMirror a) {
+  .editor-host :global(.codex-editor .ce-block__content),
+  .editor-host :global(.codex-editor .ce-toolbar__content) {
+    max-width: 100%;
+  }
+  .editor-host :global(.ce-paragraph a),
+  .editor-host :global(.cdx-quote a) {
     color: var(--fg);
     text-decoration: underline;
     text-underline-offset: 3px;
   }
-  .milkdown-host :global(.milkdown-image-block) {
-    display: block; width: 100%; margin: 24px 0;
+  .editor-host :global(.cdx-block.image-tool) {
+    margin: 24px 0;
   }
-  .milkdown-host :global(.milkdown-image-block .image-wrapper) {
-    margin: 0 auto !important; max-width: 100%;
-  }
-  .milkdown-host :global(.milkdown-image-block .image-wrapper img) {
-    max-width: 100%; height: auto; min-height: 0 !important;
-    object-fit: contain !important; display: block; border-radius: 4px;
-  }
-  .milkdown-host :global(milkdown-block-handle),
-  .milkdown-host :global(.milkdown-block-handle),
-  .milkdown-host :global(milkdown-toolbar),
-  .milkdown-host :global(.milkdown-toolbar),
-  .milkdown-host :global(milkdown-tooltip),
-  .milkdown-host :global(.milkdown-tooltip) {
-    display: none !important;
+  .editor-host :global(.image-tool__image-picture) {
+    max-width: 100%; height: auto; display: block; margin: 0 auto;
+    border-radius: 4px;
   }
 
   .bottom-toolbar {
@@ -172,7 +163,7 @@ const { siteId, slug, pageTitle, body, bodyImages } = Astro.props;
 
   const form = document.getElementById('page-form') as HTMLFormElement;
   const body = document.getElementById('body-area') as HTMLTextAreaElement;
-  const editorMount = document.getElementById('milkdown-editor') as HTMLElement;
+  const editorMount = document.getElementById('body-editor') as HTMLElement;
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
   const bottomToolbar = document.getElementById('bottom-toolbar') as HTMLElement;
   const imagePicker = document.getElementById('image-picker') as HTMLInputElement;
@@ -188,8 +179,8 @@ const { siteId, slug, pageTitle, body, bodyImages } = Astro.props;
   const initialBodyExpanded = expandImageTokens(initialBodyRaw, imageMap);
   (async () => {
     try {
-      const { mountMilkdownEditor } = await import('../scripts/body-editor-milkdown');
-      editor = await mountMilkdownEditor(
+      const { mountEditorJsEditor } = await import('../scripts/body-editor-editorjs');
+      editor = await mountEditorJsEditor(
         editorMount,
         initialBodyExpanded,
         (md) => { body.value = collapseImageTokens(md, imageMap); },

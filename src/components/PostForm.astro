@@ -121,8 +121,8 @@ const tagsChipText = formatTagsChip(initialTagNames);
     )}
   </div>
 
-  {/* ─── body editor: Milkdown mounts here, textarea is the fallback ─ */}
-  <div id="milkdown-editor" class="milkdown-host"></div>
+  {/* ─── body editor: Editor.js mounts here, textarea is the fallback ─ */}
+  <div id="body-editor" class="editor-host"></div>
   <textarea id="body-area" name="body" rows="14" placeholder="write here…" hidden>{initial.body ?? ''}</textarea>
 
   <div id="preview-area" class="preview-area" hidden>
@@ -337,75 +337,43 @@ const tagsChipText = formatTagsChip(initialTagNames);
   #sheet-more .danger:focus-visible { outline: 2px solid var(--danger); outline-offset: 4px; }
 
   /* ─── editor surface ─────────────────────────────────────────────── */
-  /* Every selector that targets Crepe-managed DOM has to use :global()
-     because the .ProseMirror div / .milkdown-image-block etc are
-     created at runtime by Crepe -- they don't carry Astro's
-     data-astro-cid-* scoping attribute, so unscoped rules silently
-     don't match. */
-  .milkdown-host {
+  /* Editor.js builds its own contenteditable DOM at runtime, so the
+     descendant rules from our typography mixin have to use :global()
+     to survive Astro's scoped-CSS rewriting (which would otherwise tag
+     `p`/`h1`/etc. with [data-astro-cid-*] selectors that never match
+     the runtime-injected nodes). */
+  .editor-host {
     flex: 1;
     background: var(--bg-elev);
     overflow-y: auto;
   }
-  .milkdown-host :global(.ProseMirror) {
+  .editor-host :global(.codex-editor) {
     max-width: 720px; margin: 0 auto;
     padding: 32px 20px 96px;
-    min-height: 100%;
-    outline: none;
     color: var(--fg);
     box-sizing: border-box;
-    // Pass $astro: true so the mixin emits :global(p), :global(h1), etc.
-    // instead of & p, & h1. Astro's scoped-CSS pipeline appends
-    // [data-astro-cid-*] to every element-name token NOT already inside a
-    // :global() wrapper; Crepe-injected DOM has no scope attribute, so the
-    // unguarded descendant rules silently fail at runtime. See the mixin
-    // partial for the full explanation.
     @include post-typography($astro: true);
   }
-  .milkdown-host :global(.ProseMirror a) {
+  .editor-host :global(.codex-editor .ce-block__content),
+  .editor-host :global(.codex-editor .ce-toolbar__content) {
+    max-width: 100%;
+  }
+  .editor-host :global(.ce-paragraph a),
+  .editor-host :global(.cdx-quote a) {
     color: var(--fg);
     text-decoration: underline;
     text-underline-offset: 3px;
     text-decoration-thickness: 1px;
   }
-
-  /* Make every image-block render full-width with its image centered.
-     Crepe's defaults give the wrapper `width: fit-content; margin: 0
-     auto`, which only centers when the block-level parent has a known
-     width -- combined with `min-height: 100px; object-fit: cover` the
-     smaller images get cropped + offset. Force a clean centered block:
-     image at intrinsic ratio, no min-height, no crop. */
-  .milkdown-host :global(.milkdown-image-block) {
-    display: block;
-    width: 100%;
+  /* Image block: render at intrinsic aspect ratio, full width. */
+  .editor-host :global(.cdx-block.image-tool) {
     margin: 16px 0;
   }
-  .milkdown-host :global(.milkdown-image-block .image-wrapper) {
-    margin: 0 auto !important;
-    max-width: 100%;
-  }
-  .milkdown-host :global(.milkdown-image-block .image-wrapper img) {
+  .editor-host :global(.image-tool__image-picture) {
     max-width: 100%;
     height: auto;
-    min-height: 0 !important;
-    object-fit: contain !important;
     display: block;
-  }
-
-  /* Crepe ships several pieces of inline chrome (a drag handle on hover,
-     a tooltip toolbar on text selection). The redesign hides them all:
-     the bottom toolbar owns formatting, the slash menu stays for power
-     users. These selectors target Crepe's own classnames -- if a future
-     version renames them, the chrome resurfaces visually but functionally
-     nothing breaks. */
-  .milkdown-host :global(milkdown-block-handle),
-  .milkdown-host :global(.milkdown-block-handle),
-  .milkdown-host :global(milkdown-toolbar),
-  .milkdown-host :global(.milkdown-toolbar),
-  .milkdown-host :global(milkdown-tooltip),
-  .milkdown-host :global(.milkdown-tooltip),
-  .milkdown-host :global(.crepe-toolbar) {
-    display: none !important;
+    margin: 0 auto;
   }
 
   /* ─── preview area ────────────────────────────────────────────────── */
@@ -491,7 +459,7 @@ const tagsChipText = formatTagsChip(initialTagNames);
 
   const form = document.getElementById('post-form') as HTMLFormElement;
   const body = document.getElementById('body-area') as HTMLTextAreaElement;
-  const editorMount = document.getElementById('milkdown-editor') as HTMLElement;
+  const editorMount = document.getElementById('body-editor') as HTMLElement;
   const previewArea = document.getElementById('preview-area') as HTMLElement;
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
   const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement | null;
@@ -534,8 +502,8 @@ const tagsChipText = formatTagsChip(initialTagNames);
   const initialBodyExpanded = expandImageTokens(initialBodyRaw, imageMap);
   (async () => {
     try {
-      const { mountMilkdownEditor } = await import('../scripts/body-editor-milkdown');
-      editor = await mountMilkdownEditor(
+      const { mountEditorJsEditor } = await import('../scripts/body-editor-editorjs');
+      editor = await mountEditorJsEditor(
         editorMount,
         initialBodyExpanded,
         (md) => { body.value = collapseImageTokens(md, imageMap); },
