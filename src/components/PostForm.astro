@@ -46,6 +46,12 @@ const tagsChipText = formatTagsChip(initialTagNames);
       placeholder="Title…"
       autocomplete="off"
     />
+    <button type="button" class="icon-btn preview-btn" id="preview-toggle" aria-label="Toggle preview" aria-pressed="false" title="Toggle preview">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
+        <circle cx="8" cy="8" r="2"/>
+      </svg>
+    </button>
     <button type="submit" class="primary publish-btn" id="save-btn">
       {mode === 'edit' ? 'Save' : 'Publish'}
     </button>
@@ -127,34 +133,6 @@ const tagsChipText = formatTagsChip(initialTagNames);
 
   <div id="preview-area" class="preview-area" hidden>
     <div class="preview-placeholder">nothing to preview yet…</div>
-  </div>
-
-  {/* ─── sticky bottom toolbar ─────────────────────────────────────── */}
-  <div class="bottom-toolbar" id="bottom-toolbar">
-    <button type="button" class="tb" data-cmd="bold" title="bold"><strong>B</strong></button>
-    <button type="button" class="tb" data-cmd="italic" title="italic"><em>I</em></button>
-    <button type="button" class="tb" data-cmd="blockquote" title="quote">❝</button>
-    <button type="button" class="tb" data-cmd="list" title="list">•</button>
-    <button type="button" class="tb" data-cmd="link" title="link">🔗</button>
-    <label class="tb tb-image" title="insert image" aria-label="insert image">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="1.5" y="3" width="15" height="12" rx="1.5"/>
-        <polyline points="1.5,12 5.5,8 8.5,11 11.5,8.5 16.5,12"/>
-        <circle cx="13" cy="6.5" r="1.25"/>
-      </svg>
-      <input id="image-picker" type="file" accept="image/*" multiple style="display:none;" />
-    </label>
-    <div class="upload-progress" id="upload-progress" hidden>
-      <div class="upload-progress-bar" id="upload-progress-bar"></div>
-    </div>
-    <span class="tb-spacer"></span>
-    <button type="button" class="tb tb-preview" data-cmd="preview" id="preview-toggle" title="Toggle preview" aria-label="Toggle preview" aria-pressed="false">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
-        <circle cx="8" cy="8" r="2"/>
-      </svg>
-      <span class="tb-label">Preview</span>
-    </button>
   </div>
 </form>
 
@@ -398,47 +376,17 @@ const tagsChipText = formatTagsChip(initialTagNames);
   }
   .preview-placeholder { color: var(--muted-2); font-size: 14px; }
 
-  /* ─── sticky bottom toolbar ──────────────────────────────────────── */
-  .bottom-toolbar {
-    position: sticky; bottom: 0;
-    display: flex; align-items: center; gap: 2px;
-    padding: 8px 12px calc(8px + var(--safe-bottom));
-    background: var(--bg-elev);
-    border-top: 1px solid var(--border);
-    z-index: 6;
-  }
-  .tb {
-    width: 40px; height: 40px; min-height: 0; padding: 0;
-    border: none; background: transparent;
-    border-radius: 8px;
-    font: inherit; font-size: 16px; line-height: 1;
+  /* Preview toggle: matches the close-btn shape on the other side of
+     the header, accent state when active. */
+  .preview-btn[aria-pressed="true"] {
+    background: var(--bg-sunken);
     color: var(--fg);
-    display: inline-flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    transition: background-color 180ms ease, color 180ms ease;
   }
-  .tb:hover { background: var(--bg-sunken); }
-  .tb[aria-pressed="true"] { background: var(--border); }
-  .tb:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
-  .tb strong { font-weight: 700; }
-  .tb em { font-style: italic; }
-  .tb-spacer { flex: 1; }
-  .upload-progress {
-    flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
-    margin: 0 4px;
-  }
-  .upload-progress-bar {
-    height: 100%; width: 0%; background: var(--fg); border-radius: 2px;
-    transition: width 80ms linear;
-  }
-  .tb-image { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-  .tb-preview { width: auto; padding: 0 10px; gap: 4px; }
-  .tb-label { font-size: 11px; font-weight: 500; }
 
   /* Respect users who'd rather not see motion. */
   @media (prefers-reduced-motion: reduce) {
     .meta-sheet { animation: none; }
-    .icon-btn, .publish-btn, .chip, .tb,
+    .icon-btn, .publish-btn, .chip,
     .sheet-row input[type="text"], .sheet-row input[type="date"],
     .cover-upload-btn, .cover-remove-btn {
       transition: none;
@@ -487,9 +435,7 @@ const tagsChipText = formatTagsChip(initialTagNames);
   const coverStatus = document.getElementById('cover-status') as HTMLElement;
   const coverUploadText = document.getElementById('cover-upload-text') as HTMLElement;
 
-  // Bottom toolbar.
-  const bottomToolbar = document.getElementById('bottom-toolbar') as HTMLElement;
-  const imagePicker = document.getElementById('image-picker') as HTMLInputElement;
+  // Preview toggle (lives in the header now).
   const previewToggle = document.getElementById('preview-toggle') as HTMLButtonElement;
 
   const today = form.dataset.today!;
@@ -596,18 +542,11 @@ const tagsChipText = formatTagsChip(initialTagNames);
   slugEditor.addEventListener('input', () => { slugInput.value = slugEditor.value; });
   slugEditor.addEventListener('change', () => { slugInput.value = slugEditor.value; });
 
-  // ─── upload progress bar ────────────────────────────────────────────
-  const uploadProgress = document.getElementById('upload-progress') as HTMLElement;
-  const uploadProgressBar = document.getElementById('upload-progress-bar') as HTMLElement;
-
-  function showProgress(pct: number) {
-    uploadProgress.hidden = false;
-    uploadProgressBar.style.width = `${pct}%`;
-    if (pct >= 100) setTimeout(() => { uploadProgress.hidden = true; uploadProgressBar.style.width = '0%'; }, 400);
-  }
-
+  // Image uploads go through compressAndUpload. The Editor.js image
+  // plugin shows its own per-block upload state, so no shared progress
+  // bar is needed; the cover-image flow uses coverStatus text only.
   function uploadFile(file: File) {
-    return compressAndUpload(file, siteId, () => {}, showProgress);
+    return compressAndUpload(file, siteId, () => {}, () => {});
   }
 
   // ─── cover image ────────────────────────────────────────────────────
@@ -652,52 +591,10 @@ const tagsChipText = formatTagsChip(initialTagNames);
   });
   coverRemove.addEventListener('click', () => clearCover());
 
-  // ─── bottom toolbar bindings ────────────────────────────────────────
-  bottomToolbar.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-cmd]');
-    if (!btn || !editor) return;
-    const cmd = btn.dataset.cmd!;
-    switch (cmd) {
-      case 'bold': editor.toggleBold(); break;
-      case 'italic': editor.toggleItalic(); break;
-      case 'blockquote': editor.toggleBlockquote(); break;
-      case 'list': editor.toggleBulletList(); break;
-      case 'link': {
-        const url = prompt('Link URL');
-        if (url) editor.insertLink(url);
-        break;
-      }
-      case 'preview': togglePreview(); break;
-    }
-  });
+  // Preview button (header). Formatting + image insertion are handled
+  // by Editor.js's inline + block toolbars.
+  previewToggle.addEventListener('click', () => { void togglePreview(); });
 
-  imagePicker.addEventListener('change', async () => {
-    const files = Array.from(imagePicker.files ?? []);
-    imagePicker.value = '';
-    for (const file of files) {
-      let blobUrl: string | null = null;
-      const r = await compressAndUpload(
-        file,
-        siteId,
-        (preview) => {
-          blobUrl = preview;
-          if (editor) editor.insertImageBlock(preview);
-        },
-        showProgress,
-      );
-      if (!r) continue;
-      const renderUrl = r.editorUrl ?? r.url;
-      if (blobUrl) rememberImage(imageMap, { id: r.id, url: blobUrl });
-      if (renderUrl !== r.url) rememberImage(imageMap, { id: r.id, url: r.url });
-      rememberImage(imageMap, { id: r.id, url: renderUrl });
-      if (editor) {
-        if (!blobUrl) editor.insertImageBlock(renderUrl);
-        body.value = collapseImageTokens(editor.getMarkdown(), imageMap);
-      } else {
-        body.value += `\n![](image:${r.id})\n`;
-      }
-    }
-  });
 
   // ─── preview toggle (replaces the write/preview tabs) ───────────────
   async function togglePreview() {
