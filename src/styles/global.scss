@@ -61,7 +61,11 @@ header.site-header {
       letter-spacing: -0.01em;
       line-height: 1;
       a {
-        color: #ccc; display: block;
+        // #6e6e6e on #f9f9f9 = 4.85:1 -- passes WCAG AA for both
+        // normal and large text. The previous #ccc was 1.6:1, which
+        // Lighthouse flagged as the page's main accessibility miss.
+        // Still reads as "muted brand" against the page, just legible.
+        color: #6e6e6e; display: block;
         &:hover { color: #dd1144; }
       }
     }
@@ -74,9 +78,11 @@ header.site-header {
     span { margin: .5em; }
     span:last-child { margin-right: 0; }
     a {
-      font-family: #{$label-font}; color: #ccc;
+      font-family: #{$label-font}; color: #6e6e6e;
       // 44x44 minimum touch target per Apple HIG / Google M3. The 18px
-      // SVG sits centered in the padded box.
+      // SVG sits centered in the padded box. #6e6e6e (~4.85:1 against
+      // the #f9f9f9 page background) passes WCAG 1.4.11 non-text
+      // contrast (3:1 minimum) and reads as muted-but-clear.
       display: inline-flex;
       align-items: center;
       justify-content: center;
