@@ -46,10 +46,12 @@ export interface AuthorProfile {
 
 export const defaultAuthorProfile: AuthorProfile = {
   name: defaultAuthor,
-  // Filled in as the author connects social profiles. Leave empty until a
-  // canonical handle exists for each platform; an empty sameAs array is
-  // strictly better than wrong URLs in a Knowledge Graph submission.
-  sameAs: [],
+  // sameAs links connect this Person entity to the author's public
+  // profiles so Google can resolve it to a single Knowledge Graph
+  // node. Add more URLs as new canonical profiles come online.
+  sameAs: [
+    'https://www.instagram.com/rio.ro161/',
+  ],
 };
 
 /** JSON-LD WebSite node. Emit on the homepage. The potentialAction lets
