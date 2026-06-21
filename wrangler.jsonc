@@ -12,11 +12,8 @@
   "r2_buckets": [
     { "binding": "PHOTOS", "bucket_name": "riovv-media" }
   ],
-  // D1 is the primary database -- co-located with the Worker for ~1-5ms
-  // query latency vs ~50-150ms over Neon HTTP. The middleware prefers
-  // env.DB over env.DATABASE_URL, so leaving the Neon secret in place
-  // is a no-op safety net: removing the binding below reverts to Neon
-  // instantly without touching application code.
+  // D1 is the only production database -- co-located with the Worker
+  // for ~1-5ms query latency. The middleware throws if env.DB is unset.
   "d1_databases": [
     { "binding": "DB", "database_name": "photoblog", "database_id": "2ec7c36a-4c0c-4989-ab84-cc1228e31cb9" }
   ],
@@ -32,8 +29,8 @@
   // session; everything else is public. No ADMIN_HOST env needed.
   //
   // Secrets set in dashboard (Settings -> Variables and secrets):
-  //   DATABASE_URL               -- Neon pooler URL with sslmode=require
   //   GITHUB_OAUTH_CLIENT_SECRET
+  //   INDEXNOW_KEY               -- 32-hex; published at /indexnow-key.txt
   //   COOKIE_DOMAIN              -- (optional) blank on workers.dev
   //   R2_PUBLIC_BASE             -- (optional) custom domain; falls back to R2_DEV_BASE
 }
