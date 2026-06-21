@@ -68,9 +68,12 @@ const tagsChipText = formatTagsChip(initialTagNames);
     </button>
     <span class="chip-sep" aria-hidden="true">·</span>
     <button type="button" class="chip chip-cover" data-sheet="cover" id="chip-cover" data-has-cover={initialCoverUrl ? 'true' : 'false'}>
-      {initialCoverUrl && (
-        <img class="chip-thumb" src={initialCoverUrl} alt="" id="chip-cover-thumb" />
-      )}
+      {/* The img is always present in the template so the Astro
+          scoped-CSS attribute is baked in. JS toggles `hidden` + `src`
+          when a cover is added or removed -- creating the node at
+          runtime would leave it unstyled and rendering at the original
+          image dimensions. */}
+      <img class="chip-thumb" src={initialCoverUrl ?? ''} alt="" id="chip-cover-thumb" hidden={!initialCoverUrl} />
       <span class="chip-text" id="chip-cover-text">{initialCoverUrl ? 'cover' : '+ cover'}</span>
     </button>
     <span class="chip-sep" aria-hidden="true">·</span>
@@ -558,15 +561,13 @@ const tagsChipText = formatTagsChip(initialTagNames);
     // Refresh the chip: thumbnail + "cover" label.
     chipCover.dataset.hasCover = 'true';
     chipCoverText.textContent = 'cover';
-    const existingThumb = document.getElementById('chip-cover-thumb');
-    if (existingThumb) {
-      (existingThumb as HTMLImageElement).src = url;
-    } else {
-      const img = document.createElement('img');
-      img.id = 'chip-cover-thumb';
-      img.className = 'chip-thumb';
-      img.src = url; img.alt = '';
-      chipCover.insertBefore(img, chipCoverText);
+    // The chip-cover-thumb <img> is always in the DOM (see PostForm
+    // template) so its Astro scoped class survives. Just swap src and
+    // unhide it.
+    const chipThumb = document.getElementById('chip-cover-thumb') as HTMLImageElement | null;
+    if (chipThumb) {
+      chipThumb.src = url;
+      chipThumb.hidden = false;
     }
   }
   function clearCover() {
@@ -576,8 +577,13 @@ const tagsChipText = formatTagsChip(initialTagNames);
     coverUploadText.textContent = '+ choose cover';
     chipCover.dataset.hasCover = 'false';
     chipCoverText.textContent = '+ cover';
-    const existingThumb = document.getElementById('chip-cover-thumb');
-    if (existingThumb) existingThumb.remove();
+    // Hide instead of remove so the scoped-CSS-attributed node stays
+    // available for the next upload.
+    const chipThumb = document.getElementById('chip-cover-thumb') as HTMLImageElement | null;
+    if (chipThumb) {
+      chipThumb.hidden = true;
+      chipThumb.src = '';
+    }
   }
   coverPicker.addEventListener('change', async () => {
     const f = coverPicker.files?.[0];
