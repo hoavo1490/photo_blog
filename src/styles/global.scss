@@ -108,25 +108,17 @@ ul.listing {
 article {
   margin: 2em 0;
 
-  // Breadcrumb sits above the title in a small muted row. Decorative
-  // chevrons are aria-hidden in the markup; screen readers walk the
-  // <nav aria-label="Breadcrumb"> as an ordered link list.
-  .breadcrumb {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
+  // Editorial eyebrow: the publish date in small muted type sits above
+  // the title and acts as a visual kicker. Removed the breadcrumb
+  // trail that used to live here -- it duplicated info already in
+  // the BreadcrumbList JSON-LD and added nothing for the reader.
+  .eyebrow {
+    font-family: #{$time-font};
     font-size: 12px;
     color: #999;
-    margin-bottom: 6px;
-    a { color: #767676; &:hover { color: #dd1144; } }
-    .breadcrumb-current {
-      color: #767676;
-      max-width: 320px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+    margin: 0 0 6px;
+    line-height: 1.2;
+    time { color: inherit; }
   }
 
   .title {
@@ -146,15 +138,17 @@ article {
   }
 
   .meta {
-    display: block;
-    overflow: auto;
-    // Date used to pull upward into the title via margin-top: -.5em --
-    // crowded against the headline and left no gap before the body.
-    // Now it sits ~10px below the title with a clear 24px channel to
-    // the first paragraph, so the meta reads as a caption.
+    // Tag chips row, directly under the title. Date used to live here
+    // alongside tags; it moved into the .eyebrow above the title for
+    // editorial rhythm (date kicker > title > topic chips).
     margin: 6px 0 24px;
     font-size: .9em;
-    .tags a { color: #767676; padding: .25em; &:hover { color: #dd1144; } }
+    .tags a {
+      color: #767676;
+      padding: .25em .25em .25em 0;
+      &:hover { color: #dd1144; }
+    }
+    .tags a + a { padding-left: .5em; }
   }
 
   .post { @include post-typography; }

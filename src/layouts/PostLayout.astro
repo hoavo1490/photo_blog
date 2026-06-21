@@ -95,32 +95,25 @@ const jsonLd = asGraph([blogPosting, breadcrumb]);
   lcpImage={firstBodyImg ?? undefined}
 >
   <article>
-    {/* Visible breadcrumb trail. The post title is intentionally NOT
-        repeated here -- the <h1> below renders it loudly, so showing
-        it twice in the same column reads as duplication. The full
+    {/* Editorial layout: date as a small eyebrow above the title,
+        title as the visual focal point, tags inline below. The full
         three-level crumb (Home > Year > Title) stays in the
         BreadcrumbList JSON-LD so Google still gets the rich-result
-        signal for SERP breadcrumb display. */}
-    {post.publishedAt && (
-      <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="/">{siteName}</a>
-        <span aria-hidden="true">›</span>
-        <a href={`/archive#${post.publishedAt.getUTCFullYear()}`}>{post.publishedAt.getUTCFullYear()}</a>
-      </nav>
+        signal for SERP breadcrumb display -- only the visible trail
+        was dropped. */}
+    {dateStr && (
+      <p class="eyebrow"><time datetime={dateStr}>{dateStr}</time></p>
     )}
     <section class="title"><h1>{post.title}</h1></section>
-    <section class="meta">
-      <span class="time">
-        <time datetime={dateStr}>{dateStr}</time>
-      </span>
-      {postTags.length > 0 && (
+    {postTags.length > 0 && (
+      <p class="meta">
         <span class="tags">
           {postTags.map((t) => (
             <a href={`/tags/${t.slug}`} rel="tag">#{t.name}</a>
           ))}
         </span>
-      )}
-    </section>
+      </p>
+    )}
     <section class="post" set:html={rendered}></section>
 
     {/* Chevron strip closing the post: prev (older) on the left, next
