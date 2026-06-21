@@ -69,7 +69,6 @@ const photoCount = initialImages.length;
         </button>
       </div>
       <input id="f-images" type="file" accept="image/*" multiple style="display:none" />
-      <span id="upload-status" class="ae-upload-status" aria-live="polite"></span>
 
       <div id="image-grid" class="ae-grid">
         <!-- thumbnails injected by JS -->
@@ -96,11 +95,20 @@ import { compressAndUpload } from '../scripts/image-compress-upload';
 const dataEl = document.getElementById('album-data') as HTMLScriptElement;
 const { mode, siteId, albumId, initialImages } = JSON.parse(dataEl.textContent!);
 
+type UploadStatus = 'done' | 'uploading' | 'failed';
+
 type UploadedImage = {
   imageId: string;
   previewUrl: string;
   width: number;
   height: number;
+  status: UploadStatus;
+  /** 0–100 while uploading. Undefined for 'done' and 'failed'. */
+  progress?: number;
+  /** Kept on failure so the retry button can re-upload the same File. */
+  file?: File;
+  /** Last error message, surfaced via title attr on the failed overlay. */
+  error?: string;
 };
 
 const images: UploadedImage[] = initialImages.map((img: any) => {
@@ -108,7 +116,11 @@ const images: UploadedImage[] = initialImages.map((img: any) => {
   const previewUrl = w
     ? `/img/${img.r2Key.replace(/\.(jpe?g|png|webp|gif)$/i, '')}.${w}w.webp`
     : `/img/${img.r2Key}`;
-  return { imageId: img.imageId, previewUrl, width: img.width, height: img.height };
+  return {
+    imageId: img.imageId, previewUrl,
+    width: img.width, height: img.height,
+    status: 'done' as const,
+  };
 });
 
 const titleInput = document.getElementById('f-title') as HTMLInputElement;
@@ -117,7 +129,6 @@ const descInput = document.getElementById('f-desc') as HTMLTextAreaElement;
 const publishedInput = document.getElementById('f-published') as HTMLInputElement;
 const fileInput = document.getElementById('f-images') as HTMLInputElement;
 const btnAddImages = document.getElementById('btn-add-images') as HTMLButtonElement;
-const uploadStatus = document.getElementById('upload-status') as HTMLSpanElement;
 const imageGrid = document.getElementById('image-grid') as HTMLDivElement;
 const photosLabel = document.getElementById('photos-count-label') as HTMLSpanElement;
 const btnSave = document.getElementById('btn-save') as HTMLButtonElement;
@@ -136,65 +147,173 @@ function updatePhotosLabel() {
   photosLabel.textContent = images.length > 0 ? `Photos · ${images.length}` : 'Photos';
 }
 
+// Per-thumbnail render. Each cell carries an overlay that reflects the
+// image's current status — uploading shows a circular progress ring;
+// failed shows a retry button; done shows just the remove (×) button.
+function renderCell(img: UploadedImage, i: number): HTMLDivElement {
+  const cell = document.createElement('div');
+  cell.className = 'ae-thumb';
+  cell.dataset.status = img.status;
+  cell.innerHTML = `
+    <img src="${img.previewUrl}" alt="" loading="lazy" />
+    <div class="ae-thumb-overlay"></div>
+    ${img.status === 'uploading' ? renderProgressRing(img.progress ?? 0) : ''}
+    ${img.status === 'failed' ? `
+      <button class="ae-thumb-retry" type="button" aria-label="Retry upload" title="${escapeAttr(img.error ?? 'Upload failed')}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 12a9 9 0 0 1 15.5-6.4L21 8"/><path d="M21 3v5h-5"/>
+          <path d="M21 12a9 9 0 0 1-15.5 6.4L3 16"/><path d="M3 21v-5h5"/>
+        </svg>
+      </button>` : ''}
+    <button class="ae-thumb-remove" type="button" aria-label="Remove photo">×</button>
+  `;
+  cell.querySelector<HTMLButtonElement>('.ae-thumb-remove')!.addEventListener('click', () => {
+    images.splice(i, 1);
+    renderGrid();
+  });
+  const retry = cell.querySelector<HTMLButtonElement>('.ae-thumb-retry');
+  if (retry) retry.addEventListener('click', () => { void retryUpload(i); });
+  return cell;
+}
+
+function renderProgressRing(pct: number): string {
+  // SVG circle stroked at stroke-dasharray = circumference. Smaller
+  // dashoffset → more arc visible.
+  const r = 18;
+  const c = 2 * Math.PI * r;
+  const dash = c * (1 - pct / 100);
+  return `
+    <svg class="ae-thumb-progress" width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
+      <circle class="ae-ring-track" cx="22" cy="22" r="${r}" />
+      <circle class="ae-ring-bar" cx="22" cy="22" r="${r}"
+        stroke-dasharray="${c}" stroke-dashoffset="${dash}"
+        transform="rotate(-90 22 22)" />
+    </svg>`;
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+}
+
 function renderGrid() {
   imageGrid.innerHTML = '';
-  images.forEach((img, i) => {
-    const cell = document.createElement('div');
-    cell.className = 'ae-thumb';
-    cell.innerHTML = `
-      <img src="${img.previewUrl}" alt="" loading="lazy" />
-      <button class="ae-thumb-remove" data-index="${i}" type="button" aria-label="Remove photo">×</button>
-    `;
-    cell.querySelector<HTMLButtonElement>('.ae-thumb-remove')!.addEventListener('click', () => {
-      images.splice(i, 1);
-      renderGrid();
-      updatePhotosLabel();
-    });
-    imageGrid.appendChild(cell);
-  });
+  images.forEach((img, i) => imageGrid.appendChild(renderCell(img, i)));
   updatePhotosLabel();
+  updateSaveState();
 }
+
+// Touch only the cell that changed — full re-render would break the
+// progress ring's CSS animation on every frame.
+function patchCell(index: number) {
+  const cells = imageGrid.children;
+  const next = renderCell(images[index], index);
+  if (cells[index]) cells[index].replaceWith(next);
+  updateSaveState();
+}
+
+function updateSaveState() {
+  const anyUploading = images.some((img) => img.status === 'uploading');
+  btnSave.disabled = anyUploading;
+}
+
 renderGrid();
 
 btnAddImages.addEventListener('click', () => fileInput.click());
 
-fileInput.addEventListener('change', async () => {
+// ── Parallel uploads with a small concurrency cap ───────────────────────
+// Three concurrent uploads is a sweet spot for R2: more than that and
+// browser connection limits per host throttle them anyway. Each upload
+// owns the index of its image entry; status flips through 'uploading'
+// → 'done' (or 'failed'), and patchCell repaints just that thumb.
+const MAX_CONCURRENT = 3;
+let activeUploads = 0;
+const queue: number[] = [];
+
+function pumpQueue() {
+  while (activeUploads < MAX_CONCURRENT && queue.length > 0) {
+    const idx = queue.shift()!;
+    activeUploads++;
+    void runUpload(idx).finally(() => { activeUploads--; pumpQueue(); });
+  }
+}
+
+async function runUpload(index: number) {
+  const entry = images[index];
+  if (!entry || !entry.file) return;
+  entry.status = 'uploading';
+  entry.progress = 0;
+  entry.error = undefined;
+  patchCell(index);
+  try {
+    const data = await compressAndUpload(
+      entry.file,
+      siteId,
+      (blobUrl) => {
+        // The compressed preview is available before the upload
+        // finishes — swap the thumb's src so the user sees the
+        // already-resized version instead of the raw multi-MB jpeg.
+        entry.previewUrl = blobUrl;
+        patchCell(index);
+      },
+      (pct) => {
+        const cur = images[index];
+        if (!cur || cur.status !== 'uploading') return;
+        cur.progress = pct;
+        // Lightweight progress update: nudge the ring's dashoffset
+        // directly instead of re-rendering the whole cell. Falls back
+        // to patchCell if the ring isn't in the DOM yet.
+        const ring = imageGrid.children[index]?.querySelector<SVGCircleElement>('.ae-ring-bar');
+        if (ring) {
+          const r = 18; const c = 2 * Math.PI * r;
+          ring.setAttribute('stroke-dashoffset', String(c * (1 - pct / 100)));
+        } else {
+          patchCell(index);
+        }
+      },
+    );
+    if (!data) throw new Error('compression or upload failed');
+    entry.imageId = data.id;
+    entry.previewUrl = data.editorUrl ?? data.url;
+    entry.status = 'done';
+    entry.progress = undefined;
+    entry.file = undefined;
+  } catch (e) {
+    entry.status = 'failed';
+    entry.progress = undefined;
+    entry.error = (e as Error).message;
+  } finally {
+    patchCell(index);
+  }
+}
+
+function retryUpload(index: number) {
+  const entry = images[index];
+  if (!entry || entry.status !== 'failed' || !entry.file) return;
+  queue.push(index);
+  pumpQueue();
+}
+
+fileInput.addEventListener('change', () => {
   const files = Array.from(fileInput.files ?? []);
   if (!files.length) return;
   fileInput.value = '';
-
   for (const file of files) {
-    uploadStatus.textContent = `Uploading ${file.name}…`;
-    btnSave.disabled = true;
-    try {
-      let previewInserted = false;
-      const data = await compressAndUpload(
-        file,
-        siteId,
-        (blobUrl) => {
-          previewInserted = true;
-          images.push({ imageId: '', previewUrl: blobUrl, width: 0, height: 0 });
-          renderGrid();
-        },
-        (pct) => { uploadStatus.textContent = `Uploading ${file.name}… ${pct}%`; },
-      );
-      if (!data) throw new Error('compression or upload failed');
-      if (previewInserted) {
-        const placeholder = images.findIndex((img) => img.imageId === '');
-        if (placeholder !== -1) {
-          images[placeholder] = { imageId: data.id, previewUrl: data.editorUrl ?? data.url, width: 0, height: 0 };
-        }
-      } else {
-        images.push({ imageId: data.id, previewUrl: data.editorUrl ?? data.url, width: 0, height: 0 });
-      }
-      renderGrid();
-    } catch (e) {
-      uploadStatus.textContent = `Upload failed: ${(e as Error).message}`;
-    } finally {
-      btnSave.disabled = false;
-    }
+    // Provisional cell: blob URL as placeholder so the user sees
+    // something instantly even before compression starts.
+    const blobPreview = URL.createObjectURL(file);
+    images.push({
+      imageId: '',
+      previewUrl: blobPreview,
+      width: 0, height: 0,
+      status: 'uploading',
+      progress: 0,
+      file,
+    });
+    renderGrid();
+    queue.push(images.length - 1);
   }
-  uploadStatus.textContent = '';
+  pumpQueue();
 });
 
 btnSave.addEventListener('click', async () => {
@@ -214,7 +333,10 @@ btnSave.addEventListener('click', async () => {
       slug,
       description: descInput.value.trim() || null,
       published: publishedInput.checked,
-      imageIds: images.map(img => img.imageId),
+      // Only persist successfully uploaded images. The 'uploading'
+      // path is guarded by updateSaveState() disabling Save, but
+      // 'failed' rows can still be present and must be skipped.
+      imageIds: images.filter((img) => img.status === 'done' && img.imageId).map((img) => img.imageId),
     };
     const resp = await fetch('/admin/api/gallery-save', {
       method: 'POST',
@@ -431,12 +553,6 @@ btnDelete?.addEventListener('click', async () => {
   .ae-label { margin-bottom: 0; }
 }
 
-.ae-upload-status {
-  font-size: 12px;
-  color: var(--muted);
-  min-height: 1em;
-}
-
 /* ── Photo grid ──────────────────────────────────────────────────────────── */
 .ae-grid {
   display: grid;
@@ -482,6 +598,66 @@ btnDelete?.addEventListener('click', async () => {
 }
 
 :global(.ae-thumb-remove:hover) {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+/* ── Status overlay (uploading / failed) ──────────────────────────────────
+   The overlay sits above the <img> and below the action buttons; its
+   visibility is driven by data-status on the parent cell so we don't
+   need duplicate classes per state. Three states:
+     done       — overlay transparent, only × visible
+     uploading  — soft black tint + a circular progress ring
+     failed     — solid red tint, retry button takes the spotlight   */
+:global(.ae-thumb-overlay) {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: background-color 180ms ease;
+}
+:global(.ae-thumb[data-status="uploading"] .ae-thumb-overlay) {
+  background: rgba(0, 0, 0, 0.35);
+}
+:global(.ae-thumb[data-status="failed"] .ae-thumb-overlay) {
+  background: rgba(217, 79, 79, 0.55);
+}
+
+:global(.ae-thumb-progress) {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+:global(.ae-ring-track) {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 3;
+}
+:global(.ae-ring-bar) {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 120ms linear;
+}
+
+:global(.ae-thumb-retry) {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 150ms ease;
+}
+:global(.ae-thumb-retry:hover) {
   background: rgba(0, 0, 0, 0.85);
 }
 
