@@ -56,9 +56,6 @@ importers:
       '@milkdown/prose':
         specifier: ^7.21.2
         version: 7.21.2
-      '@neondatabase/serverless':
-        specifier: ^1.0.0
-        version: 1.1.0
       '@types/sanitize-html':
         specifier: ^2.16.1
         version: 2.16.1
@@ -1123,10 +1120,6 @@ packages:
 
   '@milkdown/utils@7.21.2':
     resolution: {integrity: sha512-m1ZJDnh+/tnIBxLhh5euNGr1WXvsGnJkaGctsd/an5+73HqHOdtWD6L7oJF8+DQG4Kksr4WPNNZutqYGb6OAxw==}
-
-  '@neondatabase/serverless@1.1.0':
-    resolution: {integrity: sha512-r3ZZhRjEcfEdKIZnoB1RusNgvHuaBRqfCzV4Gi+5A9yUX0S4HTws/ASWqt13wL4y4I+0rqsWGdA2w7EQXHi3+Q==}
-    engines: {node: '>=19.0.0'}
 
   '@nodable/entities@2.2.0':
     resolution: {integrity: sha512-9uGyhaQavEUMC8AIddIjau4NsnsXhou+j5sBAGojCM1oxmQpVKTWR/9JxABD6UAv12vpIms55fPZKFQEhG6uBg==}
@@ -4457,8 +4450,6 @@ snapshots:
       nanoid: 5.1.11
     transitivePeerDependencies:
       - supports-color
-
-  '@neondatabase/serverless@1.1.0': {}
 
   '@nodable/entities@2.2.0': {}
 

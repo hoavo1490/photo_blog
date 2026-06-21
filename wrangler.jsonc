@@ -42,8 +42,8 @@
 	// session; everything else is public. No ADMIN_HOST env needed.
 	//
 	// Secrets set in dashboard (Settings -> Variables and secrets):
-	//   DATABASE_URL               -- Neon pooler URL with sslmode=require
 	//   GITHUB_OAUTH_CLIENT_SECRET
+	//   INDEXNOW_KEY               -- 32-hex; published at /indexnow-key.txt
 	//   COOKIE_DOMAIN              -- (optional) blank on workers.dev
 	//   R2_PUBLIC_BASE             -- (optional) custom domain; falls back to R2_DEV_BASE
 }
