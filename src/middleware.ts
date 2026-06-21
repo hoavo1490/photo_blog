@@ -1,5 +1,6 @@
 import { defineMiddleware } from 'astro:middleware';
 import { env } from 'cloudflare:workers';
+import { createNeonDriver } from './lib/db/neon-driver';
 import { createD1Driver } from './lib/db/d1-driver';
 import { classifyRoute, isCacheableMethod } from './lib/middleware/route-mode';
 import { resolveTenant, historicRedirectUrl } from './lib/middleware/tenant';
@@ -21,17 +22,18 @@ import { loadSession } from './lib/auth/login-flow';
 // Bindings come from `cloudflare:workers` in Astro 6 + adapter v13.
 
 declare global {
-  // Test escape hatch -- integration tests inject a SqlDriver (typically
-  // PGLite) to avoid needing a real D1 binding. Production never sets this.
+  // Test escape hatch -- integration tests inject a SqlDriver to avoid
+  // a real Neon connection. Production code never sets this.
   // eslint-disable-next-line no-var
   var __RIOVV_TEST_DRIVER__: import('./lib/db/driver').SqlDriver | undefined;
 }
 
 function driverFromEnv() {
   if (globalThis.__RIOVV_TEST_DRIVER__) return globalThis.__RIOVV_TEST_DRIVER__;
-  const e = env as unknown as { DB?: unknown };
+  const e = env as unknown as { DB?: unknown; DATABASE_URL?: string };
   if (e.DB) return createD1Driver(e.DB as import('@cloudflare/workers-types').D1Database);
-  throw new Error('No database: add a D1 binding (DB) to wrangler.jsonc');
+  if (e.DATABASE_URL) return createNeonDriver(e.DATABASE_URL);
+  throw new Error('No database: add D1 binding (DB) or set DATABASE_URL secret');
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
