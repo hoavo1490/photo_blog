@@ -1,36 +1,49 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "photoblog",
-  "main": "./node_modules/@astrojs/cloudflare/dist/entrypoints/server.js",
-  "compatibility_date": "2026-06-01",
-  "compatibility_flags": ["nodejs_compat"],
-  "assets": {
-    "directory": "./dist",
-    "binding": "ASSETS"
-  },
-  "observability": { "enabled": true },
-  "r2_buckets": [
-    { "binding": "PHOTOS", "bucket_name": "riovv-media" }
-  ],
-  // No D1 binding: the D1 database id only exists in the dev wrangler
-  // account, not in the production account that runs the auto-build.
-  // Production routes back to Neon via the DATABASE_URL secret until
-  // we create a D1 database under the production account and update
-  // the database_id here.
-  // Non-sensitive plaintext vars live here so they survive `wrangler
-  // deploy` (which removes any plaintext var not in this file). Sensitive
-  // values stay in the dashboard as Secrets.
-  "vars": {
-    "R2_DEV_BASE": "https://pub-7480ea7436e74ecba3571e8a20bd7944.r2.dev",
-    "ALLOWED_USERS": "hoavo1490",
-    "GITHUB_OAUTH_CLIENT_ID": "Ov23likTQeKJlWQ9d0bQ"
-  }
-  // Path-based admin: /admin/* (and /login, /logout, /auth/*) require a
-  // session; everything else is public. No ADMIN_HOST env needed.
-  //
-  // Secrets set in dashboard (Settings -> Variables and secrets):
-  //   DATABASE_URL               -- Neon pooler URL with sslmode=require
-  //   GITHUB_OAUTH_CLIENT_SECRET
-  //   COOKIE_DOMAIN              -- (optional) blank on workers.dev
-  //   R2_PUBLIC_BASE             -- (optional) custom domain; falls back to R2_DEV_BASE
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "photoblog",
+	"main": "./node_modules/@astrojs/cloudflare/dist/entrypoints/server.js",
+	"compatibility_date": "2026-06-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS"
+	},
+	"observability": {
+		"enabled": true
+	},
+	"r2_buckets": [
+		{
+			"binding": "PHOTOS",
+			"bucket_name": "riovv-media"
+		}
+	],
+	// D1 lives in the production account (hoavo.dng@gmail.com's Account,
+	// id 33ce38ea66...). The middleware reads env.DB, so the binding
+	// name must stay "DB" -- the auto-bind-on-create dialog used
+	// "photoblog" by default; that has been overridden here.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "photoblog",
+			"database_id": "a4b2d7d4-57ba-48c1-b5e3-625c87690cec"
+		}
+	],
+	// Non-sensitive plaintext vars live here so they survive `wrangler
+	// deploy` (which removes any plaintext var not in this file). Sensitive
+	// values stay in the dashboard as Secrets.
+	"vars": {
+		"R2_DEV_BASE": "https://pub-7480ea7436e74ecba3571e8a20bd7944.r2.dev",
+		"ALLOWED_USERS": "hoavo1490",
+		"GITHUB_OAUTH_CLIENT_ID": "Ov23likTQeKJlWQ9d0bQ"
+	}
+	// Path-based admin: /admin/* (and /login, /logout, /auth/*) require a
+	// session; everything else is public. No ADMIN_HOST env needed.
+	//
+	// Secrets set in dashboard (Settings -> Variables and secrets):
+	//   DATABASE_URL               -- Neon pooler URL with sslmode=require
+	//   GITHUB_OAUTH_CLIENT_SECRET
+	//   COOKIE_DOMAIN              -- (optional) blank on workers.dev
+	//   R2_PUBLIC_BASE             -- (optional) custom domain; falls back to R2_DEV_BASE
 }
