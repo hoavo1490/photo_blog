@@ -7,6 +7,7 @@ import { rewriteEmbeds } from '../lib/embeds';
 import { sanitizePostHtml } from '../lib/sanitize-html';
 import { buildBodyImageResolver } from '../lib/render';
 import { postUrl } from '../lib/post-url';
+import { absolutizeHtmlUrls } from '../lib/seo';
 
 export const GET: APIRoute = async (ctx) => {
   const tenant = ctx.locals.tenant;
@@ -31,7 +32,14 @@ export const GET: APIRoute = async (ctx) => {
       buildBodyImageResolver(driver, p, env_),
     ]);
     const rewritten = rewriteEmbeds(rewriteImageTokens(p.body, bodyResolver));
-    const fullHtml = sanitizePostHtml(await renderPostHtml(rewritten));
+    // Absolutize every src/href/srcset before it lands in
+    // <content:encoded>. Feed readers (and AI ingestion bots) don't
+    // resolve relative URLs against the feed URL reliably, so the
+    // post's <picture> chain has to ship full https:// references.
+    const fullHtml = absolutizeHtmlUrls(
+      sanitizePostHtml(await renderPostHtml(rewritten)),
+      siteUrl,
+    );
     const categories = tags.map((t) => `      <category>${esc(t.name)}</category>`).join('\n');
     return `
     <item>

@@ -5,6 +5,7 @@ import * as tagsRepo from '../lib/db/tags';
 import * as albumsRepo from '../lib/db/albums';
 import { postUrl } from '../lib/post-url';
 import { batchCoverImagesFor } from '../lib/render';
+import { absoluteUrl } from '../lib/seo';
 
 export const GET: APIRoute = async (ctx) => {
   const tenant = ctx.locals.tenant;
@@ -46,8 +47,10 @@ export const GET: APIRoute = async (ctx) => {
   for (const p of all) {
     const u = `${siteUrl}${postUrl({ publishedAt: p.publishedAt!, slug: p.slug })}`;
     const cover = coverByPost.get(p.id);
+    // Google's image-sitemap extension requires <image:loc> to be an
+    // absolute URL; relative paths get silently dropped from the index.
     const imageXml = cover
-      ? `<image:image><image:loc>${esc(cover.url)}</image:loc><image:title>${esc(p.title)}</image:title></image:image>`
+      ? `<image:image><image:loc>${esc(absoluteUrl(cover.url, siteUrl))}</image:loc><image:title>${esc(p.title)}</image:title></image:image>`
       : '';
     urls.push(`<url><loc>${u}</loc><lastmod>${p.updatedAt.toISOString()}</lastmod>${imageXml}</url>`);
   }

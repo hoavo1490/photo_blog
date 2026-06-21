@@ -3,7 +3,7 @@ import { ClientRouter } from 'astro:transitions';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import { defaultSiteName, defaultAuthor } from '../data/nav';
-import { resolveCanonicalUrl } from '../lib/seo';
+import { resolveCanonicalUrl, resolveCanonicalOrigin, absoluteUrl, absolutizeSrcset } from '../lib/seo';
 import '../styles/global.scss';
 
 // SEO meta is centralized here so per-page props translate cleanly into
@@ -58,6 +58,18 @@ const desc = description ?? fallbackDescription;
 // hostname. Falls back to the request origin for tenants without a
 // custom domain yet.
 const canonical = resolveCanonicalUrl(Astro.locals.tenant ?? null, Astro.url);
+const canonicalOrigin = resolveCanonicalOrigin(Astro.locals.tenant ?? null, Astro.url);
+// og:image, twitter:image, and the LCP preload must be absolute URLs
+// -- crawlers and feed readers don't resolve relative paths reliably,
+// and Google's structured-data parser drops images with relative URLs.
+const absImage = image ? absoluteUrl(image, canonicalOrigin) : undefined;
+const absLcpImage = lcpImage ? {
+  ...lcpImage,
+  src: absoluteUrl(lcpImage.src, canonicalOrigin),
+  srcset: absolutizeSrcset(lcpImage.srcset, canonicalOrigin),
+  webpSrcset: absolutizeSrcset(lcpImage.webpSrcset, canonicalOrigin),
+  avifSrcset: absolutizeSrcset(lcpImage.avifSrcset, canonicalOrigin),
+} : undefined;
 ---
 <!DOCTYPE html>
 <html lang="vi">
@@ -85,7 +97,7 @@ const canonical = resolveCanonicalUrl(Astro.locals.tenant ?? null, Astro.url);
     <meta property="og:description" content={desc} />
     <meta property="og:url" content={canonical} />
     <meta property="og:locale" content="vi_VN" />
-    {image && <meta property="og:image" content={image} />}
+    {absImage && <meta property="og:image" content={absImage} />}
     {image && imageWidth && <meta property="og:image:width" content={String(imageWidth)} />}
     {image && imageHeight && <meta property="og:image:height" content={String(imageHeight)} />}
     {type === 'article' && publishedAt && (
@@ -102,7 +114,7 @@ const canonical = resolveCanonicalUrl(Astro.locals.tenant ?? null, Astro.url);
     <meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
     <meta name="twitter:title" content={title ?? siteName} />
     <meta name="twitter:description" content={desc} />
-    {image && <meta name="twitter:image" content={image} />}
+    {absImage && <meta name="twitter:image" content={absImage} />}
 
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="alternate" type="application/rss+xml" title={siteName} href="/atom.xml" />
@@ -113,33 +125,33 @@ const canonical = resolveCanonicalUrl(Astro.locals.tenant ?? null, Astro.url);
         in the LCP window. Pick the smallest format we have; older
         browsers without that format don't preload but still render
         correctly via the <picture> chain in the body. */}
-    {lcpImage && lcpImage.avifSrcset && (
+    {absLcpImage && absLcpImage.avifSrcset && (
       <link
         rel="preload"
         as="image"
         type="image/avif"
-        imagesrcset={lcpImage.avifSrcset}
-        imagesizes={lcpImage.sizes}
+        imagesrcset={absLcpImage.avifSrcset}
+        imagesizes={absLcpImage.sizes}
         fetchpriority="high"
       />
     )}
-    {lcpImage && !lcpImage.avifSrcset && lcpImage.webpSrcset && (
+    {absLcpImage && !absLcpImage.avifSrcset && absLcpImage.webpSrcset && (
       <link
         rel="preload"
         as="image"
         type="image/webp"
-        imagesrcset={lcpImage.webpSrcset}
-        imagesizes={lcpImage.sizes}
+        imagesrcset={absLcpImage.webpSrcset}
+        imagesizes={absLcpImage.sizes}
         fetchpriority="high"
       />
     )}
-    {lcpImage && !lcpImage.webpSrcset && !lcpImage.avifSrcset && (
+    {absLcpImage && !absLcpImage.webpSrcset && !absLcpImage.avifSrcset && (
       <link
         rel="preload"
         as="image"
-        href={lcpImage.src}
-        imagesrcset={lcpImage.srcset}
-        imagesizes={lcpImage.sizes}
+        href={absLcpImage.src}
+        imagesrcset={absLcpImage.srcset}
+        imagesizes={absLcpImage.sizes}
         fetchpriority="high"
       />
     )}

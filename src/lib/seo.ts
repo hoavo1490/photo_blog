@@ -30,6 +30,51 @@ export function resolveCanonicalUrl(tenant: TenantLike | null | undefined, reque
   return `${resolveCanonicalOrigin(tenant, requestUrl)}${requestUrl.pathname}`;
 }
 
+/** Convert a possibly-relative URL into an absolute one rooted at `origin`.
+ *  RSS readers, Open Graph crawlers, and Google's structured-data parser
+ *  all require absolute URLs — relative `/img/...` paths get silently
+ *  dropped or resolved against the wrong base. Pass through unchanged
+ *  when the URL is already absolute or protocol-relative. */
+export function absoluteUrl(url: string | null | undefined, origin: string): string {
+  if (!url) return '';
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('//')) return url;
+  if (url.startsWith('/')) return `${origin}${url}`;
+  return `${origin}/${url}`;
+}
+
+/** Rewrite each URL in a srcset attribute to be absolute, preserving
+ *  the width descriptor (e.g. ` 600w`) on each entry. */
+export function absolutizeSrcset(srcset: string | undefined, origin: string): string | undefined {
+  if (!srcset) return srcset;
+  return srcset.split(',').map((p) => {
+    const t = p.trim();
+    const sp = t.search(/\s/);
+    return sp === -1
+      ? absoluteUrl(t, origin)
+      : `${absoluteUrl(t.slice(0, sp), origin)}${t.slice(sp)}`;
+  }).join(', ');
+}
+
+/** Rewrite every relative URL inside a string of HTML to be absolute.
+ *  Targets `src="..."` and `srcset="..."` attributes (the two places
+ *  where the picture-chain emits relative `/img/...` paths). srcset
+ *  parsing is intentionally minimal: split by comma, strip the
+ *  trailing descriptor, absolutize, reassemble. */
+export function absolutizeHtmlUrls(html: string, origin: string): string {
+  return html
+    .replace(/\b(src|href)="(\/[^"]*)"/g, (_m, attr, url) => `${attr}="${origin}${url}"`)
+    .replace(/\bsrcset="([^"]+)"/g, (_m, set: string) => {
+      const parts = set.split(',').map((p) => {
+        const trimmed = p.trim();
+        const space = trimmed.search(/\s/);
+        const url = space === -1 ? trimmed : trimmed.slice(0, space);
+        const desc = space === -1 ? '' : trimmed.slice(space);
+        return `${absoluteUrl(url, origin)}${desc}`;
+      });
+      return `srcset="${parts.join(', ')}"`;
+    });
+}
+
 export interface SocialLink {
   /** Public profile URL — feeds Schema.org Person.sameAs. */
   url: string;
