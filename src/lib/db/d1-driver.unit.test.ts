@@ -34,6 +34,21 @@ describe('d1-driver SQL translation', () => {
     const { driver, captured } = withFakeD1();
     await driver.query('SELECT * FROM posts WHERE id = $1 AND status = $2', ['x', 'y']);
     expect(captured[0].sql).toBe('SELECT * FROM posts WHERE id = ? AND status = ?');
+    expect(captured[0].params).toEqual(['x', 'y']);
+  });
+
+  it('expands params for repeated $N references (SQLite ? is positional)', async () => {
+    const { driver, captured } = withFakeD1();
+    await driver.query(
+      `SELECT * FROM posts
+         WHERE site_id = $1 AND id <> $2
+           AND (published_at < $3
+                OR (published_at = $3 AND id < $2))`,
+      ['site', 'post', '2026-06-21'],
+    );
+    // $2 used twice, $3 used twice → SQL has 5 ? marks, params expanded to 5
+    expect((captured[0].sql.match(/\?/g) ?? []).length).toBe(5);
+    expect(captured[0].params).toEqual(['site', 'post', '2026-06-21', '2026-06-21', 'post']);
   });
 
   it('strips ::type and ::type[] casts', async () => {

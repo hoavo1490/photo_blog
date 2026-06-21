@@ -23,15 +23,35 @@ import type { Row, SqlDriver } from './driver';
 //   into JS arrays so repository code reads native arrays regardless
 //   of which backend served the query.
 
-function translateSql(sql: string): string {
+function translateNonParam(sql: string): string {
   return sql
-    .replace(/\$\d+/g, '?')
     .replace(/::[a-zA-Z_][\w[\]]*/g, '')
     .replace(/\s+NULLS\s+(LAST|FIRST)\b/gi, '')
     .replace(/\bnow\(\)/gi, "strftime('%Y-%m-%dT%H:%M:%fZ','now')")
     .replace(/to_char\(\s*(\w+)\s+AT\s+TIME\s+ZONE\s+'UTC',\s*'YYYY'\s*\)/gi, "strftime('%Y',$1)")
     .replace(/to_char\(\s*(\w+)\s+AT\s+TIME\s+ZONE\s+'UTC',\s*'MM'\s*\)/gi, "strftime('%m',$1)")
     .replace(/to_char\(\s*(\w+)\s+AT\s+TIME\s+ZONE\s+'UTC',\s*'DD'\s*\)/gi, "strftime('%d',$1)");
+}
+
+/** Translate Postgres `$N` placeholders into SQLite `?` placeholders AND
+ *  expand the param array so each `?` is bound to its corresponding
+ *  value. Postgres reuses `$N` references (a single value bound once,
+ *  consulted N times); SQLite's `?` is strictly positional, so a query
+ *  with `$2` appearing twice must be translated to two `?`s and the
+ *  param at index 1 must appear twice in the bind list. Naive global
+ *  `$\d+` -> `?` replacement breaks here -- it was the source of a
+ *  D1_ERROR("Wrong number of parameter bindings") in production. */
+function translateSqlAndExpandParams(
+  sql: string,
+  params: unknown[],
+): { sql: string; params: unknown[] } {
+  const expanded: unknown[] = [];
+  const translated = translateNonParam(sql).replace(/\$(\d+)/g, (_m, n: string) => {
+    const idx = parseInt(n, 10) - 1;
+    expanded.push(params[idx]);
+    return '?';
+  });
+  return { sql: translated, params: expanded };
 }
 
 function serializeParam(v: unknown): unknown {
@@ -68,16 +88,18 @@ function deserializeRow<T>(row: T): T {
 export function createD1Driver(db: D1Database): SqlDriver {
   return {
     async query<T = Row>(text: string, params: unknown[] = []): Promise<T[]> {
+      const t = translateSqlAndExpandParams(text, params);
       const result = await db
-        .prepare(translateSql(text))
-        .bind(...params.map(serializeParam))
+        .prepare(t.sql)
+        .bind(...t.params.map(serializeParam))
         .all<T>();
       return (result.results ?? []).map(deserializeRow);
     },
     async exec(text: string, params: unknown[] = []): Promise<void> {
+      const t = translateSqlAndExpandParams(text, params);
       await db
-        .prepare(translateSql(text))
-        .bind(...params.map(serializeParam))
+        .prepare(t.sql)
+        .bind(...t.params.map(serializeParam))
         .run();
     },
   };
