@@ -12,14 +12,11 @@
   "r2_buckets": [
     { "binding": "PHOTOS", "bucket_name": "riovv-media" }
   ],
-  // D1 is the primary database -- co-located with the Worker for ~1-5ms
-  // query latency vs ~50-150ms over Neon HTTP. The middleware prefers
-  // env.DB over env.DATABASE_URL, so leaving the Neon secret in place
-  // is a no-op safety net: removing the binding below reverts to Neon
-  // instantly without touching application code.
-  "d1_databases": [
-    { "binding": "DB", "database_name": "photoblog", "database_id": "2ec7c36a-4c0c-4989-ab84-cc1228e31cb9" }
-  ],
+  // No D1 binding: the D1 database id only exists in the dev wrangler
+  // account, not in the production account that runs the auto-build.
+  // Production routes back to Neon via the DATABASE_URL secret until
+  // we create a D1 database under the production account and update
+  // the database_id here.
   // Non-sensitive plaintext vars live here so they survive `wrangler
   // deploy` (which removes any plaintext var not in this file). Sensitive
   // values stay in the dashboard as Secrets.
