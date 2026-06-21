@@ -1,8 +1,11 @@
 import type { APIRoute } from 'astro';
+import { env } from 'cloudflare:workers';
 import * as posts from '../../../lib/db/posts';
 import * as tags from '../../../lib/db/tags';
 import { slugify } from '../../../lib/slug';
 import type { SqlDriver } from '../../../lib/db/driver';
+import { pingIndexNow, type IndexNowEnv } from '../../../lib/indexnow';
+import { postUrl } from '../../../lib/post-url';
 
 interface SaveBody {
   mode: 'new' | 'edit';
@@ -70,6 +73,27 @@ export const POST: APIRoute = async (ctx) => {
 
   // Replace tag set.
   await tags.setPostTags(driver, { siteId: b.siteId, postId, tagNames: b.tagNames });
+
+  // IndexNow ping: fire-and-forget. Includes the post URL plus the index
+  // pages whose content just changed (home, archive, every tag's
+  // landing). Search engines pull the URLs and re-crawl within minutes.
+  const tenant = ctx.locals.tenant;
+  if (tenant) {
+    const host = tenant.customDomain ?? ctx.url.hostname;
+    const final = await posts.findById(driver, { siteId: b.siteId, id: postId });
+    if (final?.publishedAt) {
+      const urls = [
+        `https://${host}${postUrl({ publishedAt: final.publishedAt, slug: final.slug })}`,
+        `https://${host}/`,
+        `https://${host}/archive`,
+        ...b.tagNames.map((t) => `https://${host}/tags/${slugify(t)}`),
+      ];
+      const pingPromise = pingIndexNow({ env: env as unknown as IndexNowEnv, host, urls });
+      // ctx.locals.waitUntil keeps the work alive after Response returns.
+      const wait = (ctx.locals as { waitUntil?: (p: Promise<unknown>) => void }).waitUntil;
+      if (wait) wait(pingPromise); else void pingPromise;
+    }
+  }
 
   return new Response(JSON.stringify({ id: postId, slug }), {
     headers: { 'content-type': 'application/json' },
