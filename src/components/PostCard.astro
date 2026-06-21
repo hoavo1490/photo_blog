@@ -37,11 +37,16 @@ const loadingAttr  = priority ? 'eager' : aboveFold ? 'eager' : 'lazy';
 const decodingAttr = priority ? 'sync'  : 'async';
 const fetchAttr   = priority ? 'high'  : aboveFold ? 'auto'  : 'low';
 
-// Sizes attribute matches the homepage grid:
-//   <= 480px : 1 column → 100vw
-//   <= 800px : 2 columns → 50vw (with 6px gap; close enough for sizes)
-//   else     : 3 columns → 33vw inside a 750px max wrapper, so ~250px
-const sizesAttr = '(max-width: 480px) 100vw, (max-width: 800px) 50vw, 250px';
+// Sizes attribute matches the homepage grid AND the page-width mixin
+// in styles/global.scss (#content caps at 300/350/400/750px below
+// 320/375/414/800px breakpoints). The container is never 100vw, so
+// promising 100vw made Lighthouse pick the 800w variant when the
+// 400w one would do at DPR 1 -- ~90KB of wasted LCP bytes.
+//
+//   <= 480px : 1 column inside a 400px container → 400px
+//   <= 800px : 2 columns inside a ~400px container → ~200px
+//   else     : 3 columns inside a 750px container with 12px of gaps → ~246px
+const sizesAttr = '(max-width: 480px) 400px, (max-width: 800px) 200px, 250px';
 
 const jpegSrcset: string[] = [];
 const webpSrcset: string[] = [];

@@ -49,7 +49,10 @@ const years = [...byYear.entries()].sort((a, b) => b[0] - a[0]);
 const latestCover = cards[0]?.cover;
 const latestDesc = cards[0]?.desc;
 const latest = cards[0];
-const lcpSizes = '(max-width: 480px) 100vw, (max-width: 800px) 50vw, 250px';
+// Kept in lock-step with PostCard.astro's sizesAttr so the preload
+// and the eventual <picture> pick the same variant -- otherwise the
+// browser fires two requests for the LCP candidate.
+const lcpSizes = '(max-width: 480px) 400px, (max-width: 800px) 200px, 250px';
 const lcpSrcset = latest && latest.r2Key && latest.variantWidths.length > 0
   ? [
       ...latest.variantWidths.map((w) => `${variantUrlForKey(latest.r2Key!, w, env_)} ${w}w`),

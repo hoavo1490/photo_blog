@@ -15,10 +15,10 @@ export const GET: APIRoute = ({ url }) => {
     'Disallow: /auth/',
     '',
     `Sitemap: ${url.origin}/sitemap.xml`,
-    // Point LLM-driven crawlers at our /llms.txt summary. Standard
-    // robots.txt clients ignore unknown directives; this line is a
-    // hint for the emerging convention.
-    `LLM-Content: ${url.origin}/llms.txt`,
+    // Used to emit an `LLM-Content:` hint pointing at /llms.txt -- that
+    // directive isn't part of the robots.txt spec (Google's validator
+    // flagged the whole file as invalid). LLM crawlers find /llms.txt
+    // via the well-known path convention instead; no directive needed.
     '',
   ].join('\n');
 
