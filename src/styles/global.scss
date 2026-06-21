@@ -163,6 +163,14 @@ article {
   // zoom-in cursor so users know the click does something.
   .post img[data-pswp-src] { cursor: zoom-in; }
 
+  // The post-typography mixin emits `& ul { padding-left: 24px }` for
+  // markdown bullet lists. Archive/tags pages use a `ul.listing` for
+  // the dated post index, which wants to sit flush with the section
+  // title -- no left indent. This class-qualified selector has higher
+  // specificity than the mixin's bare-element rule, so it wins.
+  .post ul.listing,
+  .post ul.listing li { padding-left: 0; }
+
   .divider {
     margin: 2em 0;
     position: relative;

@@ -4,11 +4,11 @@ import * as tags from '../lib/db/tags';
 import { postUrl } from '../lib/post-url';
 import type { SqlDriver } from '../lib/db/driver';
 
-// Mirrors the original Jekyll tags page: a sized/color-graded cloud at
-// the top, and below it a section per tag listing every published post
-// in that tag. Tag-cloud links are anchor jumps (#<slug>) within the
-// same page, not separate routes. The /tags/<slug> route still exists
-// for direct linking / SEO, but on-page tag clicks stay scrolly.
+// Mirrors the original Jekyll tags page: a color-graded cloud at the
+// top, and below it a section per tag listing every published post in
+// that tag. Tag-cloud links are anchor jumps (#<slug>) within the same
+// page, not separate routes. The /tags/<slug> route still exists for
+// direct linking / SEO, but on-page tag clicks stay scrolly.
 
 const tenant = Astro.locals.tenant!;
 const driver = Astro.locals.db! as SqlDriver;
@@ -50,10 +50,9 @@ function lerp(t: number): string {
       <div id="tag_cloud">
         {all.map((t) => {
           const w = weight(t.publishedCount);
-          const size = (0.9 + w * 1.1).toFixed(2);
           return (
             <a href={`#${encodeURIComponent(t.slug)}`} title={`${t.name} (${t.publishedCount})`}
-              style={`color: ${lerp(w)}; font-size: ${size}em;`}>{t.name}</a>
+              style={`color: ${lerp(w)};`}>{t.name}</a>
           );
         })}
       </div>
@@ -80,3 +79,22 @@ function lerp(t: number): string {
     </section>
   </article>
 </BaseLayout>
+
+<style is:global>
+  /* Tag cloud is inline text -- the font-size used to scale with post
+     count (0.9-2.0em), which dwarfed the post title's hierarchy. Now
+     every tag renders at body size; weight is conveyed by the color
+     gradient (lerp from #f8e0e6 -> #ff3333) computed inline. */
+  #tag_cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin: 0 0 20px;
+  }
+  #tag_cloud a {
+    font-size: inherit;
+    line-height: 1.4;
+    text-decoration: none;
+  }
+  #tag_cloud a:hover { text-decoration: underline; }
+</style>
