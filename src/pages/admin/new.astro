@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import PostForm from '../../components/PostForm.astro';
+import * as topicsRepo from '../../lib/db/topics';
 import type { SqlDriver } from '../../lib/db/driver';
 
 const session = Astro.locals.session;
@@ -14,7 +15,8 @@ const sites = await driver.query<{ id: string }>(
 );
 if (sites.length === 0) return new Response('No sites', { status: 403 });
 const siteId = sites[0].id;
+const topicNames = (await topicsRepo.listForSite(driver, { siteId })).map((t) => t.name);
 ---
 <AdminLayout title="new post" bare>
-  <PostForm mode="new" siteId={siteId} initial={{ tagNames: [] }} />
+  <PostForm mode="new" siteId={siteId} initial={{ tagNames: [] }} knownTopicNames={topicNames} />
 </AdminLayout>

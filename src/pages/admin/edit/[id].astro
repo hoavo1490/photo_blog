@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import PostForm from '../../../components/PostForm.astro';
 import * as posts from '../../../lib/db/posts';
+import * as topicsRepo from '../../../lib/db/topics';
 import type { SqlDriver } from '../../../lib/db/driver';
 import { publicUrlForKey, editorPreviewUrlForKey } from '../../../lib/r2/images';
 import { allImageTokens } from '../../../lib/markdown';
@@ -29,6 +30,12 @@ const tagRows = await driver.query<{ name: string }>(
   [postId],
 );
 const tagNames = tagRows.map((r) => r.name);
+
+const allTopics = await topicsRepo.listForSite(driver, { siteId });
+const topicName = post.topicId
+  ? (allTopics.find((t) => t.id === post.topicId)?.name ?? null)
+  : null;
+const topicNames = allTopics.map((t) => t.name);
 
 // Resolve current cover URL (if any) so the editor can show a thumbnail.
 let coverUrl: string | null = null;
@@ -78,6 +85,7 @@ if (bodyTokens.length > 0) {
   <PostForm
     mode="edit"
     siteId={siteId}
-    initial={{ ...post, tagNames, coverUrl, bodyImages }}
+    initial={{ ...post, tagNames, topicName, coverUrl, bodyImages }}
+    knownTopicNames={topicNames}
   />
 </AdminLayout>

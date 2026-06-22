@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 import * as posts from '../../../lib/db/posts';
 import * as tags from '../../../lib/db/tags';
+import * as topics from '../../../lib/db/topics';
 import { slugify } from '../../../lib/slug';
 import type { SqlDriver } from '../../../lib/db/driver';
 import { pingIndexNow, type IndexNowEnv } from '../../../lib/indexnow';
@@ -16,6 +17,8 @@ interface SaveBody {
   date?: string;
   body: string;
   tagNames: string[];
+  /** Empty / omitted = clear topic. Otherwise upsert by name and assign. */
+  topicName?: string | null;
   coverImageId?: string | null;
 }
 
@@ -40,6 +43,20 @@ export const POST: APIRoute = async (ctx) => {
   // coverImageId === null clears cover; undefined leaves untouched.
   const coverImageId = b.coverImageId === undefined ? undefined : (b.coverImageId || null);
 
+  // Resolve topic: blank/null = clear; non-empty = upsert by name.
+  let topicId: string | null | undefined;
+  if (b.topicName === undefined) {
+    topicId = undefined;
+  } else {
+    const name = (b.topicName ?? '').trim();
+    if (!name) {
+      topicId = null;
+    } else {
+      const topic = await topics.findOrCreate(driver, { siteId: b.siteId, name });
+      topicId = topic.id;
+    }
+  }
+
   let postId: string;
   if (b.mode === 'new') {
     const created = await posts.createDraft(driver, {
@@ -51,6 +68,9 @@ export const POST: APIRoute = async (ctx) => {
     // date acts as the published_at stamp.
     const publishedAt = b.date ? new Date(`${b.date}T12:00:00Z`) : undefined;
     await posts.publish(driver, { siteId: b.siteId, id: postId, publishedAt });
+    if (topicId !== undefined) {
+      await posts.update(driver, { siteId: b.siteId, id: postId, topicId });
+    }
   } else {
     if (!b.postId) return new Response('postId required for edit', { status: 400 });
     // Only published posts carry a published_at, and only the date chip
@@ -65,7 +85,7 @@ export const POST: APIRoute = async (ctx) => {
       : undefined;
     const updated = await posts.update(driver, {
       siteId: b.siteId, id: b.postId, title: b.title, body: b.body,
-      coverImageId, publishedAt,
+      coverImageId, topicId, publishedAt,
     });
     if (!updated) return new Response('not found', { status: 404 });
     postId = updated.id;
@@ -86,6 +106,10 @@ export const POST: APIRoute = async (ctx) => {
         `https://${host}${postUrl({ publishedAt: final.publishedAt, slug: final.slug })}`,
         `https://${host}/`,
         `https://${host}/archive`,
+        `https://${host}/topics`,
+        ...(b.topicName && b.topicName.trim()
+          ? [`https://${host}/topics/${slugify(b.topicName)}`]
+          : []),
         ...b.tagNames.map((t) => `https://${host}/tags/${slugify(t)}`),
       ];
       const pingPromise = pingIndexNow({ env: env as unknown as IndexNowEnv, host, urls });

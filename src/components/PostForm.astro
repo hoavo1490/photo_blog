@@ -7,14 +7,18 @@ interface Props {
   siteId: string;
   initial: Partial<Post> & {
     tagNames?: string[];
+    topicName?: string | null;
     coverUrl?: string | null;
     /** {uuid, url} for every image:<uuid> token in the body, resolved
      *  server-side so the editor can render images inline. New uploads
      *  during the session join this map client-side. */
     bodyImages?: ReadonlyArray<{ id: string; url: string }>;
   };
+  /** Existing topic names on this site, surfaced in the editor as a
+   *  pick-or-create datalist. */
+  knownTopicNames?: ReadonlyArray<string>;
 }
-const { mode, siteId, initial } = Astro.props;
+const { mode, siteId, initial, knownTopicNames } = Astro.props;
 const today = new Date().toISOString().slice(0, 10);
 const initialCoverId = initial.coverImageId ?? '';
 const initialCoverUrl = initial.coverUrl ?? '';
@@ -24,8 +28,11 @@ const initialDate = initial.publishedAt
   : today;
 const initialTagNames = initial.tagNames ?? [];
 const initialTagsCsv = initialTagNames.join(', ');
+const initialTopicName = initial.topicName ?? '';
 const dateChipText = formatDateChip(initialDate, today);
 const tagsChipText = formatTagsChip(initialTagNames);
+const topicChipText = initialTopicName ? initialTopicName : '+ topic';
+const topicOptions = knownTopicNames ?? [];
 ---
 <form
   id="post-form"
@@ -67,6 +74,10 @@ const tagsChipText = formatTagsChip(initialTagNames);
       <span class="chip-text">{tagsChipText}</span>
     </button>
     <span class="chip-sep" aria-hidden="true">·</span>
+    <button type="button" class="chip" data-sheet="topic" id="chip-topic">
+      <span class="chip-text">{topicChipText}</span>
+    </button>
+    <span class="chip-sep" aria-hidden="true">·</span>
     <button type="button" class="chip chip-cover" data-sheet="cover" id="chip-cover" data-has-cover={initialCoverUrl ? 'true' : 'false'}>
       {/* The img is always present in the template so the Astro
           scoped-CSS attribute is baked in. JS toggles `hidden` + `src`
@@ -86,6 +97,7 @@ const tagsChipText = formatTagsChip(initialTagNames);
       these into the save payload via FormData. */}
   <input type="hidden" name="date" id="date-input" value={initialDate} />
   <input type="hidden" name="tags" id="tags-input" value={initialTagsCsv} />
+  <input type="hidden" name="topic" id="topic-input" value={initialTopicName} />
   <input type="hidden" name="slug" id="slug-input" value={initial.slug ?? ''} />
   <input type="hidden" name="coverImageId" id="cover-image-id" value={initialCoverId} />
 
@@ -102,6 +114,24 @@ const tagsChipText = formatTagsChip(initialTagNames);
       <span class="sheet-label">tags (comma-separated)</span>
       <input type="text" id="tags-editor" value={initialTagsCsv} placeholder="photography, leica" />
     </label>
+  </div>
+
+  <div class="meta-sheet" id="sheet-topic" hidden>
+    <label class="sheet-row">
+      <span class="sheet-label">topic</span>
+      <input
+        type="text"
+        id="topic-editor"
+        list="topic-options"
+        value={initialTopicName}
+        placeholder="pick one or type a new name"
+        autocomplete="off"
+      />
+      <button type="button" class="topic-clear-btn" id="topic-clear" title="clear topic">clear</button>
+    </label>
+    <datalist id="topic-options">
+      {topicOptions.map((name) => <option value={name}>{name}</option>)}
+    </datalist>
   </div>
 
   <div class="meta-sheet" id="sheet-cover" hidden>
@@ -269,6 +299,16 @@ const tagsChipText = formatTagsChip(initialTagNames);
     border-color: var(--fg);
     box-shadow: 0 0 0 3px rgba(9, 9, 11, 0.08);
   }
+  .topic-clear-btn {
+    height: 32px; padding: 0 10px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg-elev); color: var(--muted);
+    font: inherit; font-size: 13px;
+    cursor: pointer;
+    transition: background-color 180ms ease, color 180ms ease;
+  }
+  .topic-clear-btn:hover { background: var(--bg-sunken); color: var(--fg); }
+
   .sheet-row-cover { gap: 16px; align-items: flex-start; }
   .upload-status { font-size: 13px; color: var(--muted); align-self: center; }
 
@@ -418,16 +458,20 @@ const tagsChipText = formatTagsChip(initialTagNames);
   // Chips + their hidden form inputs.
   const chipDate = document.getElementById('chip-date') as HTMLButtonElement;
   const chipTags = document.getElementById('chip-tags') as HTMLButtonElement;
+  const chipTopic = document.getElementById('chip-topic') as HTMLButtonElement;
   const chipCover = document.getElementById('chip-cover') as HTMLButtonElement;
   const chipCoverText = document.getElementById('chip-cover-text') as HTMLElement;
   const dateInput = document.getElementById('date-input') as HTMLInputElement;
   const tagsInput = document.getElementById('tags-input') as HTMLInputElement;
+  const topicInput = document.getElementById('topic-input') as HTMLInputElement;
   const slugInput = document.getElementById('slug-input') as HTMLInputElement;
   const coverIdInput = document.getElementById('cover-image-id') as HTMLInputElement;
 
   // Sheet editors -- one per chip.
   const datePicker = document.getElementById('date-picker') as HTMLInputElement;
   const tagsEditor = document.getElementById('tags-editor') as HTMLInputElement;
+  const topicEditor = document.getElementById('topic-editor') as HTMLInputElement;
+  const topicClear = document.getElementById('topic-clear') as HTMLButtonElement;
   const slugEditor = document.getElementById('slug-editor') as HTMLInputElement;
 
   // Cover sheet pieces.
@@ -488,6 +532,7 @@ const tagsChipText = formatTagsChip(initialTagNames);
   const sheets = new Map<string, HTMLElement>([
     ['date', document.getElementById('sheet-date') as HTMLElement],
     ['tags', document.getElementById('sheet-tags') as HTMLElement],
+    ['topic', document.getElementById('sheet-topic') as HTMLElement],
     ['cover', document.getElementById('sheet-cover') as HTMLElement],
     ['more', document.getElementById('sheet-more') as HTMLElement],
   ]);
@@ -495,6 +540,7 @@ const tagsChipText = formatTagsChip(initialTagNames);
   const chipBySheet = new Map<string, HTMLButtonElement | null>([
     ['date', chipDate],
     ['tags', chipTags],
+    ['topic', chipTopic],
     ['cover', chipCover],
     ['more', chipMore],
   ]);
@@ -541,6 +587,18 @@ const tagsChipText = formatTagsChip(initialTagNames);
   };
   tagsEditor.addEventListener('input', updateTagsChip);
   tagsEditor.addEventListener('change', updateTagsChip);
+
+  const updateTopicChip = () => {
+    const v = topicEditor.value.trim();
+    topicInput.value = v;
+    chipTopic.querySelector('.chip-text')!.textContent = v || '+ topic';
+  };
+  topicEditor.addEventListener('input', updateTopicChip);
+  topicEditor.addEventListener('change', updateTopicChip);
+  topicClear.addEventListener('click', () => {
+    topicEditor.value = '';
+    updateTopicChip();
+  });
 
   slugEditor.addEventListener('input', () => { slugInput.value = slugEditor.value; });
   slugEditor.addEventListener('change', () => { slugInput.value = slugEditor.value; });
@@ -642,6 +700,7 @@ const tagsChipText = formatTagsChip(initialTagNames);
       date: fd.get('date'),
       body: currentBody(),
       tagNames: String(fd.get('tags') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+      topicName: String(fd.get('topic') ?? '').trim() || null,
       coverImageId: coverIdInput.value || null,
     };
     const r = await fetch('/admin/api/save', {

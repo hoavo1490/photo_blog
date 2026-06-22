@@ -1,0 +1,44 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import * as topicsRepo from '../../lib/db/topics';
+import { postUrl } from '../../lib/post-url';
+import type { SqlDriver } from '../../lib/db/driver';
+
+const tenant = Astro.locals.tenant!;
+const driver = Astro.locals.db!;
+const topicSlug = Astro.params.topic!;
+
+const topic = await topicsRepo.findBySlug(driver, { siteId: tenant.id, slug: topicSlug });
+if (!topic) {
+  return new Response('Topic not found', { status: 404 });
+}
+
+const rows = await (driver as SqlDriver).query<{
+  slug: string; title: string; published_at: string;
+}>(
+  `SELECT p.slug, p.title, p.published_at
+   FROM posts p
+   WHERE p.site_id = $1 AND p.topic_id = $2 AND p.status = 'published'
+   ORDER BY p.published_at DESC`,
+  [tenant.id, topic.id],
+);
+const posts = rows.map((r) => ({ slug: r.slug, title: r.title, publishedAt: new Date(r.published_at) }));
+---
+<BaseLayout title={topic.name} description={`Posts in ${topic.name} on hoavv.`}>
+  <article>
+    <section class="title"><h1>{topic.name}</h1></section>
+    <section class="post">
+      <ul class="listing">
+        {posts.map((p) => {
+          const dateStr = p.publishedAt.toISOString().slice(0, 10);
+          return (
+            <li class="listing-item">
+              <time datetime={dateStr}>{dateStr}</time>{' '}
+              <a href={postUrl(p)} title={p.title}>{p.title}</a>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  </article>
+</BaseLayout>

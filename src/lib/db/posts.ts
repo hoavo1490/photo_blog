@@ -19,6 +19,7 @@ export interface Post {
   description: string | null;
   status: PostStatus;
   publishedAt: Date | null;
+  topicId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,6 +34,7 @@ interface PostRow {
   description: string | null;
   status: PostStatus;
   published_at: string | Date | null;
+  topic_id: string | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -48,6 +50,7 @@ function fromRow(r: PostRow): Post {
     description: r.description,
     status: r.status,
     publishedAt: r.published_at ? new Date(r.published_at as string | Date) : null,
+    topicId: r.topic_id,
     createdAt: new Date(r.created_at as string | Date),
     updatedAt: new Date(r.updated_at as string | Date),
   };
@@ -55,7 +58,7 @@ function fromRow(r: PostRow): Post {
 
 const SELECT = `
   id, site_id, slug, title, body, cover_image_id, description,
-  status, published_at, created_at, updated_at
+  status, published_at, topic_id, created_at, updated_at
 `;
 
 // ----- create ----- //
@@ -187,6 +190,8 @@ export interface UpdatePostInput {
   body?: string;
   description?: string | null;
   coverImageId?: string | null;
+  /** null clears the topic; undefined leaves it untouched. */
+  topicId?: string | null;
   /** When provided, restamps published_at. The editor's date chip uses
    *  this to let authors retroactively change a post's publish day; the
    *  /YYYY/MM/DD/<slug> URL changes with it (by design). */
@@ -213,6 +218,10 @@ export async function update(driver: SqlDriver, args: UpdatePostInput): Promise<
   if (args.coverImageId !== undefined) {
     sets.push(`cover_image_id = $${params.length + 1}`);
     params.push(args.coverImageId);
+  }
+  if (args.topicId !== undefined) {
+    sets.push(`topic_id = $${params.length + 1}`);
+    params.push(args.topicId);
   }
   if (args.publishedAt !== undefined) {
     sets.push(`published_at = $${params.length + 1}::timestamptz`);

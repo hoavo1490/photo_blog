@@ -60,6 +60,14 @@ CREATE TABLE IF NOT EXISTS images (
 CREATE INDEX IF NOT EXISTS images_site_uploaded ON images (site_id, uploaded_at DESC);
 
 
+CREATE TABLE IF NOT EXISTS topics (
+  id      TEXT NOT NULL PRIMARY KEY DEFAULT (lower(hex(randomblob(4)))||'-'||lower(hex(randomblob(2)))||'-4'||substr(lower(hex(randomblob(2))),2)||'-'||substr('89ab',abs(random())%4+1,1)||substr(lower(hex(randomblob(2))),2)||'-'||lower(hex(randomblob(6)))),
+  site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  slug    TEXT NOT NULL,
+  name    TEXT NOT NULL,
+  UNIQUE (site_id, slug)
+);
+
 CREATE TABLE IF NOT EXISTS posts (
   id             TEXT NOT NULL PRIMARY KEY DEFAULT (lower(hex(randomblob(4)))||'-'||lower(hex(randomblob(2)))||'-4'||substr(lower(hex(randomblob(2))),2)||'-'||substr('89ab',abs(random())%4+1,1)||substr(lower(hex(randomblob(2))),2)||'-'||lower(hex(randomblob(6)))),
   site_id        TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
@@ -70,11 +78,13 @@ CREATE TABLE IF NOT EXISTS posts (
   description    TEXT,
   status         TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published','scheduled')),
   published_at   TEXT,
+  topic_id       TEXT REFERENCES topics(id) ON DELETE SET NULL,
   created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   UNIQUE (site_id, slug)
 );
 CREATE INDEX IF NOT EXISTS posts_site_pubdate ON posts (site_id, published_at DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS posts_topic ON posts (topic_id) WHERE topic_id IS NOT NULL;
 
 -- WHEN guard prevents infinite recursion: trigger only fires when app
 -- didn't explicitly set updated_at in the UPDATE statement.

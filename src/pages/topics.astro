@@ -1,0 +1,54 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import * as topics from '../lib/db/topics';
+import { postUrl } from '../lib/post-url';
+import type { SqlDriver } from '../lib/db/driver';
+
+const tenant = Astro.locals.tenant!;
+const driver = Astro.locals.db! as SqlDriver;
+
+const all = (await topics.listForSite(driver, { siteId: tenant.id }))
+  .filter((t) => t.publishedCount > 0);
+
+const rows = await driver.query<{
+  topic_id: string; post_slug: string; post_title: string; published_at: string;
+}>(
+  `SELECT p.topic_id, p.slug AS post_slug, p.title AS post_title, p.published_at
+   FROM posts p
+   WHERE p.site_id = $1 AND p.status = 'published' AND p.topic_id IS NOT NULL
+   ORDER BY p.published_at DESC`,
+  [tenant.id],
+);
+const postsByTopic = new Map<string, { slug: string; title: string; publishedAt: Date }[]>();
+for (const r of rows) {
+  const list = postsByTopic.get(r.topic_id) ?? [];
+  list.push({ slug: r.post_slug, title: r.post_title, publishedAt: new Date(r.published_at) });
+  postsByTopic.set(r.topic_id, list);
+}
+---
+<BaseLayout title="topics" description="Browse posts on hoavv by topic.">
+  <article>
+    <section class="title"><h1>topics</h1></section>
+    <section class="post">
+      <ul class="listing">
+        {all.map((t) => {
+          const list = postsByTopic.get(t.id) ?? [];
+          return (
+            <>
+              <li class="listing-seperator" id={t.slug}>{t.name}</li>
+              {list.map((p) => {
+                const dateStr = p.publishedAt.toISOString().slice(0, 10);
+                return (
+                  <li class="listing-item">
+                    <time datetime={dateStr}>{dateStr}</time>{' '}
+                    <a href={postUrl(p)} title={p.title}>{p.title}</a>
+                  </li>
+                );
+              })}
+            </>
+          );
+        })}
+      </ul>
+    </section>
+  </article>
+</BaseLayout>

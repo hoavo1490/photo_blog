@@ -19,6 +19,8 @@ describe('pglite-driver + migrations', () => {
     );
     const names = rows.map((r) => r.tablename);
     expect(names).toEqual([
+      'album_images',
+      'albums',
       'images',
       'pages',
       'post_tags',
@@ -28,6 +30,7 @@ describe('pglite-driver + migrations', () => {
       'site_members',
       'sites',
       'tags',
+      'topics',
       'users',
     ]);
   });
