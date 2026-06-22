@@ -173,7 +173,7 @@ article {
   // between for editorial rhythm, so this adjacent-sibling rule
   // intentionally only fires on the index pages and leaves the
   // post detail spacing untouched.
-  .title + .post { margin-top: 1.5em; }
+  .title + .post { margin-top: 2.5em; }
   // Lightbox affordance: body images carry data-pswp-src when the
   // PhotoSwipe handler will open them in a lightbox. Show the
   // zoom-in cursor so users know the click does something.
