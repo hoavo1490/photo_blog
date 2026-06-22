@@ -101,7 +101,7 @@ header.site-header {
 }
 
 ul.listing {
-  margin-top: 2.25em;
+  margin-top: 1em;
   list-style: none;
   padding-left: 0;
   li {
@@ -167,6 +167,13 @@ article {
   }
 
   .post { @include post-typography; }
+  // Index pages (archive / topics / tags / about) place `<section
+  // class="post">` directly after `<section class="title">` with
+  // nothing between. The post layout puts `.eyebrow` / `.meta` in
+  // between for editorial rhythm, so this adjacent-sibling rule
+  // intentionally only fires on the index pages and leaves the
+  // post detail spacing untouched.
+  .title + .post { margin-top: 1.5em; }
   // Lightbox affordance: body images carry data-pswp-src when the
   // PhotoSwipe handler will open them in a lightbox. Show the
   // zoom-in cursor so users know the click does something.
