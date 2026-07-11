@@ -5,6 +5,16 @@
 // lines (or paragraph boundaries) above and below. Inline URLs inside a
 // sentence are left alone — they become normal autolinks via marked.
 //
+// Authors may also paste a provider's ready-made "embed code" (a full
+// `<iframe …>` snippet on its own line). We pull the `src` out of it and
+// run it through the same handlers, so the pasted iframe is normalized to
+// our privacy host + CSS wrapper rather than surviving raw. This matters
+// most for YouTube: its embed code points at www.youtube.com, which is NOT
+// in the iframe allowlist, so a raw paste would have its src stripped by
+// sanitize-html and render as an empty box. Normalizing rewrites it to the
+// allowlisted youtube-nocookie host. Both the canonical share URL and the
+// `/embed/` URL form are recognized for every provider.
+//
 // All emitted iframes use the host's no-cookie / privacy variant where
 // available (youtube-nocookie.com), lazy-load, and carry no inline
 // styles — the public stylesheet controls width / aspect-ratio.
@@ -40,11 +50,14 @@ const handlers: EmbedHandler[] = [
   {
     provider: 'youtube',
     match: (line) => {
-      // youtu.be/<id>, youtube.com/watch?v=<id>, youtube.com/shorts/<id>
+      // youtu.be/<id>, youtube.com/watch?v=<id>, youtube.com/shorts/<id>,
+      // and the embed form youtube(-nocookie).com/embed/<id> (the src of a
+      // pasted embed snippet). All normalize to the nocookie host.
       const m =
         /^https?:\/\/(?:www\.)?youtu\.be\/([A-Za-z0-9_-]{6,})/.exec(line) ||
         /^https?:\/\/(?:www\.)?youtube\.com\/watch\?(?:[^ ]*&)?v=([A-Za-z0-9_-]{6,})/.exec(line) ||
-        /^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{6,})/.exec(line);
+        /^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{6,})/.exec(line) ||
+        /^https?:\/\/(?:www\.)?youtube(?:-nocookie)?\.com\/embed\/([A-Za-z0-9_-]{6,})/.exec(line);
       if (!m) return null;
       return {
         provider: 'youtube',
@@ -58,16 +71,22 @@ const handlers: EmbedHandler[] = [
   {
     provider: 'spotify',
     match: (line) => {
-      // open.spotify.com/(track|album|playlist|episode|show)/<id>
-      const m = /^https?:\/\/open\.spotify\.com\/(track|album|playlist|episode|show)\/([A-Za-z0-9]+)/.exec(line);
+      // open.spotify.com/(track|album|playlist|episode|show)/<id> and the
+      // embed form open.spotify.com/embed/<type>/<id> (the src of a pasted
+      // embed snippet). Query strings (utm_source=generator, ?si=…) are
+      // dropped by rebuilding the canonical embed URL.
+      const m = /^https?:\/\/open\.spotify\.com\/(?:embed\/)?(track|album|playlist|episode|show)\/([A-Za-z0-9]+)/.exec(line);
       if (!m) return null;
+      const type = m[1];
+      // A single track / episode fits Spotify's compact 152px player, but
+      // a playlist / album / show streams a scrollable track list that is
+      // unusable at 152px — give those the taller 'playlist' shape so the
+      // list is actually visible.
+      const isList = type === 'playlist' || type === 'album' || type === 'show';
       return {
         provider: 'spotify',
-        src: `https://open.spotify.com/embed/${m[1]}/${m[2]}`,
-        // Album / playlist embeds prefer the wider audio shape; track
-        // embeds also work fine in 'audio' (Spotify renders a compact
-        // 152px-tall player by default).
-        shape: 'audio',
+        src: `https://open.spotify.com/embed/${type}/${m[2]}`,
+        shape: isList ? 'playlist' : 'audio',
         allow: 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture',
         title: 'Spotify embed',
       };
@@ -76,7 +95,11 @@ const handlers: EmbedHandler[] = [
   {
     provider: 'vimeo',
     match: (line) => {
-      const m = /^https?:\/\/(?:www\.)?vimeo\.com\/(\d+)/.exec(line);
+      // vimeo.com/<id> and the embed form player.vimeo.com/video/<id>
+      // (the src of a pasted embed snippet).
+      const m =
+        /^https?:\/\/(?:www\.)?vimeo\.com\/(\d+)/.exec(line) ||
+        /^https?:\/\/player\.vimeo\.com\/video\/(\d+)/.exec(line);
       if (!m) return null;
       return {
         provider: 'vimeo',
@@ -90,13 +113,14 @@ const handlers: EmbedHandler[] = [
   {
     provider: 'applemusic',
     match: (line) => {
-      // music.apple.com/{country}/{type}/{slug}/{id}[?i=trackNum]
-      // Embed host swaps music.apple.com → embed.music.apple.com and
-      // keeps the full path including query string. Playlists get a
-      // taller 'playlist' shape (450px) because Apple Music streams
-      // the track list; everything else uses 'audio' (152px) which
-      // is tall enough for the compact album/track player.
-      const m = /^https?:\/\/music\.apple\.com\/(\S+)/.exec(line);
+      // music.apple.com/{country}/{type}/{slug}/{id}[?i=trackNum], plus
+      // the embed form embed.music.apple.com/… (the src of a pasted embed
+      // snippet). Embed host swaps music.apple.com → embed.music.apple.com
+      // and keeps the full path including query string. Playlists get a
+      // taller 'playlist' shape (450px) because Apple Music streams the
+      // track list; everything else uses 'audio' (152px) which is tall
+      // enough for the compact album/track player.
+      const m = /^https?:\/\/(?:embed\.)?music\.apple\.com\/(\S+)/.exec(line);
       if (!m) return null;
       const path = m[1];
       const isPlaylist = /\/playlist\//.test(path);
@@ -111,12 +135,33 @@ const handlers: EmbedHandler[] = [
   },
 ];
 
-/** Detect a standalone embed URL on a single trimmed line. Exported for
- *  tests. */
+/** Pull the `src` URL out of a standalone pasted `<iframe …>` embed
+ *  snippet. Returns null when the trimmed line isn't an iframe tag or has
+ *  no src. Only single-line iframes are recognized — every provider's
+ *  copy-paste embed code is emitted on a single line. */
+function iframeSrc(line: string): string | null {
+  if (!/^<iframe[\s>]/i.test(line)) return null;
+  const m = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(line);
+  return m ? m[1] : null;
+}
+
+/** Detect a standalone embed on a single trimmed line — either a bare
+ *  provider URL or a pasted `<iframe>` embed snippet. Exported for tests. */
 export function detectEmbed(line: string): EmbedMeta | null {
   for (const h of handlers) {
     const m = h.match(line);
     if (m) return m;
+  }
+  // Fall back to a pasted iframe: extract its src and re-run the handlers
+  // against the URL. This normalizes the paste to our privacy host + CSS
+  // wrapper, and keeps the emitted src on an allowlisted host (e.g.
+  // youtube.com/embed → youtube-nocookie.com).
+  const src = iframeSrc(line);
+  if (src) {
+    for (const h of handlers) {
+      const m = h.match(src);
+      if (m) return m;
+    }
   }
   return null;
 }
