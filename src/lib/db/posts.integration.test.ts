@@ -142,6 +142,18 @@ describe('posts.listPublished', () => {
     expect(list.map((p) => p.slug)).toEqual(['new', 'old']);
   });
 
+  it('shows a post dated today even when its noon-UTC stamp is ahead of now()', async () => {
+    // Repro of the "today post won't show" bug: the editor stamps the
+    // author's chosen date at noon UTC, so for authors east of UTC a
+    // post published earlier in their day sat in the future relative to
+    // now() and was filtered out. listPublished must not gate on now().
+    const d = await posts.createDraft(driver, { siteId: siteA, slug: 'today', title: 'Today', body: '' });
+    const noonUtcYearsAhead = new Date('2099-01-01T12:00:00Z');
+    await posts.publish(driver, { siteId: siteA, id: d.id, publishedAt: noonUtcYearsAhead });
+    const list = await posts.listPublished(driver, { siteId: siteA });
+    expect(list.map((p) => p.slug)).toContain('today');
+  });
+
   it('respects limit + offset', async () => {
     for (let i = 0; i < 5; i++) {
       const d = await posts.createDraft(driver, { siteId: siteA, slug: `p${i}`, title: `P${i}`, body: '' });

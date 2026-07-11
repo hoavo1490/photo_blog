@@ -152,10 +152,17 @@ export async function listPublished(
 ): Promise<Post[]> {
   const limit = args.limit ?? 100;
   const offset = args.offset ?? 0;
+  // A post is visible as soon as it's published. We deliberately do NOT
+  // gate on `published_at <= now()`: the editor stamps the author's chosen
+  // date at noon UTC (save.ts), so for authors east of UTC a post dated
+  // "today" would otherwise read as future and stay hidden until UTC
+  // passes noon. There is no scheduling feature (nothing sets
+  // status='scheduled'), and every other read path (findByPath,
+  // findAdjacent, findRelatedByTags) already treats 'published' as visible.
   const rows = await driver.query<PostRow>(
     `SELECT ${SELECT}
      FROM posts
-     WHERE site_id = $1 AND status = 'published' AND published_at <= now()
+     WHERE site_id = $1 AND status = 'published'
      ORDER BY published_at DESC
      LIMIT $2 OFFSET $3`,
     [args.siteId, limit, offset],
