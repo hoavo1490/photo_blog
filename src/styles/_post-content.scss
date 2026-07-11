@@ -49,6 +49,13 @@
   $embedAudio: if($astro, ':global(.embed--audio)','& .embed--audio');
   $embedPlaylist: if($astro, ':global(.embed--playlist)','& .embed--playlist');
   $embedIframe:if($astro, ':global(.embed iframe)','& .embed iframe');
+  // Provider-specific audio/list players. Heights match each platform's
+  // own native embed so the track list isn't clipped.
+  $embedApple:        if($astro, ':global(.embed--applemusic)','& .embed--applemusic');
+  $embedSpotifyAudio: if($astro, ':global(.embed--spotify.embed--audio)','& .embed--spotify.embed--audio');
+  $embedSpotifyList:  if($astro, ':global(.embed--spotify.embed--playlist)','& .embed--spotify.embed--playlist');
+  $embedAppleAudio:   if($astro, ':global(.embed--applemusic.embed--audio)','& .embed--applemusic.embed--audio');
+  $embedAppleList:    if($astro, ':global(.embed--applemusic.embed--playlist)','& .embed--applemusic.embed--playlist');
 
   // Body text scales below the post title (1.15em on 14px = 16.1px) so
   // the title remains the loudest thing in the column. Body h1 sits
@@ -124,8 +131,22 @@
     overflow: hidden;
   }
   #{$embedVideo} { aspect-ratio: 16 / 9; }
-  #{$embedAudio} { height: 152px; } // Spotify / Apple Music compact
-  #{$embedPlaylist} { height: 450px; } // Apple Music playlist track list
+  // Fallback heights if a provider ever emits a bare shape; the
+  // provider-specific rules below override these to the platform's own
+  // native embed height so nothing is clipped.
+  #{$embedAudio} { height: 152px; }
+  #{$embedPlaylist} { height: 450px; }
+  // Spotify: 352px is the default the embed generator emits for a single
+  // track; playlists/albums get a touch more room to reveal the list.
+  #{$embedSpotifyAudio} { height: 352px; }
+  #{$embedSpotifyList} { height: 380px; }
+  // Apple Music: a single song is a compact 175px bar; an album/playlist
+  // needs 450px for its track list. Cap width at Apple's native 660px max
+  // so the landscape player doesn't stretch across the 750px column and
+  // leave dead space.
+  #{$embedApple} { max-width: 660px; }
+  #{$embedAppleAudio} { height: 175px; }
+  #{$embedAppleList} { height: 450px; }
   #{$embedIframe} {
     width: 100%;
     height: 100%;

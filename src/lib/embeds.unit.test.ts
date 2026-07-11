@@ -25,11 +25,11 @@ describe('detectEmbed', () => {
     expect(m?.src).toBe('https://player.vimeo.com/video/123456');
   });
 
-  it('matches Apple Music album (audio shape)', () => {
+  it('matches Apple Music album (tall playlist shape so the track list shows)', () => {
     const m = detectEmbed('https://music.apple.com/us/album/folklore/1551278014');
     expect(m?.provider).toBe('applemusic');
     expect(m?.src).toBe('https://embed.music.apple.com/us/album/folklore/1551278014');
-    expect(m?.shape).toBe('audio');
+    expect(m?.shape).toBe('playlist');
   });
 
   it('matches Apple Music playlist (playlist shape)', () => {
@@ -39,7 +39,7 @@ describe('detectEmbed', () => {
     expect(m?.shape).toBe('playlist');
   });
 
-  it('matches Apple Music song (?i= track query retained)', () => {
+  it('matches Apple Music song (?i= track → compact audio shape, query retained)', () => {
     const m = detectEmbed('https://music.apple.com/us/album/folklore/1551278014?i=1551278029');
     expect(m?.provider).toBe('applemusic');
     expect(m?.src).toBe('https://embed.music.apple.com/us/album/folklore/1551278014?i=1551278029');

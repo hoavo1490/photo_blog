@@ -116,20 +116,24 @@ const handlers: EmbedHandler[] = [
       // music.apple.com/{country}/{type}/{slug}/{id}[?i=trackNum], plus
       // the embed form embed.music.apple.com/… (the src of a pasted embed
       // snippet). Embed host swaps music.apple.com → embed.music.apple.com
-      // and keeps the full path including query string. Playlists get a
-      // taller 'playlist' shape (450px) because Apple Music streams the
-      // track list; everything else uses 'audio' (152px) which is tall
-      // enough for the compact album/track player.
+      // and keeps the full path including query string.
+      //
+      // Shape follows Apple's own native embed heights (CSS keys off the
+      // provider + shape classes): a single song — the `/song/` path or an
+      // `?i=<trackId>` on an album URL — gets the compact 'audio' player;
+      // an album or playlist gets the tall 'playlist' player so its
+      // scrollable track list is fully visible instead of clipped.
       const m = /^https?:\/\/(?:embed\.)?music\.apple\.com\/(\S+)/.exec(line);
       if (!m) return null;
       const path = m[1];
+      const isSong = /\/song\//.test(path) || /[?&]i=/.test(path);
       const isPlaylist = /\/playlist\//.test(path);
       return {
         provider: 'applemusic',
         src: `https://embed.music.apple.com/${path}`,
-        shape: isPlaylist ? 'playlist' : 'audio',
+        shape: isSong ? 'audio' : 'playlist',
         allow: 'encrypted-media',
-        title: isPlaylist ? 'Apple Music playlist' : 'Apple Music',
+        title: isSong ? 'Apple Music song' : isPlaylist ? 'Apple Music playlist' : 'Apple Music album',
       };
     },
   },
