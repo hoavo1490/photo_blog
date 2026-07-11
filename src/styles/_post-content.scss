@@ -47,6 +47,7 @@
   $embed:      if($astro, ':global(.embed)',     '& .embed');
   $embedVideo: if($astro, ':global(.embed--video)','& .embed--video');
   $embedAudio: if($astro, ':global(.embed--audio)','& .embed--audio');
+  $embedPlaylist: if($astro, ':global(.embed--playlist)','& .embed--playlist');
   $embedIframe:if($astro, ':global(.embed iframe)','& .embed iframe');
 
   // Body text scales below the post title (1.15em on 14px = 16.1px) so
@@ -123,7 +124,8 @@
     overflow: hidden;
   }
   #{$embedVideo} { aspect-ratio: 16 / 9; }
-  #{$embedAudio} { height: 152px; } // Spotify default compact player
+  #{$embedAudio} { height: 152px; } // Spotify / Apple Music compact
+  #{$embedPlaylist} { height: 450px; } // Apple Music playlist track list
   #{$embedIframe} {
     width: 100%;
     height: 100%;

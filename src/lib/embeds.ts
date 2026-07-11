@@ -15,7 +15,7 @@
 
 export interface EmbedHandler {
   /** Stable id used in the iframe class for CSS styling hooks. */
-  provider: 'youtube' | 'spotify' | 'vimeo';
+  provider: 'youtube' | 'spotify' | 'vimeo' | 'applemusic';
   /** Match a *single trimmed line*; return embed metadata or null. */
   match: (line: string) => EmbedMeta | null;
 }
@@ -24,8 +24,9 @@ export interface EmbedMeta {
   provider: EmbedHandler['provider'];
   /** Final iframe `src`. */
   src: string;
-  /** Display aspect ratio class — 'video' (16:9) or 'audio' (compact). */
-  shape: 'video' | 'audio';
+  /** Display shape — 'video' (16:9), 'audio' (compact 152px), or
+   *  'playlist' (tall 450px for Apple Music stream playlists). */
+  shape: 'video' | 'audio' | 'playlist';
   /** allow= attribute value, per provider best practice. */
   allow: string;
   /** Title attribute (a11y). */
@@ -86,6 +87,28 @@ const handlers: EmbedHandler[] = [
       };
     },
   },
+  {
+    provider: 'applemusic',
+    match: (line) => {
+      // music.apple.com/{country}/{type}/{slug}/{id}[?i=trackNum]
+      // Embed host swaps music.apple.com → embed.music.apple.com and
+      // keeps the full path including query string. Playlists get a
+      // taller 'playlist' shape (450px) because Apple Music streams
+      // the track list; everything else uses 'audio' (152px) which
+      // is tall enough for the compact album/track player.
+      const m = /^https?:\/\/music\.apple\.com\/(\S+)/.exec(line);
+      if (!m) return null;
+      const path = m[1];
+      const isPlaylist = /\/playlist\//.test(path);
+      return {
+        provider: 'applemusic',
+        src: `https://embed.music.apple.com/${path}`,
+        shape: isPlaylist ? 'playlist' : 'audio',
+        allow: 'encrypted-media',
+        title: isPlaylist ? 'Apple Music playlist' : 'Apple Music',
+      };
+    },
+  },
 ];
 
 /** Detect a standalone embed URL on a single trimmed line. Exported for
@@ -99,8 +122,8 @@ export function detectEmbed(line: string): EmbedMeta | null {
 }
 
 /** Render an EmbedMeta into the iframe HTML that will survive sanitize.
- *  Wrapper <div class="embed embed--video|audio"> lets the public CSS
- *  enforce aspect-ratio without inline styles. */
+ *  Wrapper <div class="embed embed--video|audio|playlist"> lets the
+ *  public CSS enforce aspect-ratio without inline styles. */
 export function renderEmbedHtml(m: EmbedMeta): string {
   return (
     `<div class="embed embed--${m.shape} embed--${m.provider}">` +
@@ -133,4 +156,5 @@ export const ALLOWED_IFRAME_HOSTNAMES = [
   'www.youtube-nocookie.com',
   'open.spotify.com',
   'player.vimeo.com',
+  'embed.music.apple.com',
 ];

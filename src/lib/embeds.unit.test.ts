@@ -25,6 +25,27 @@ describe('detectEmbed', () => {
     expect(m?.src).toBe('https://player.vimeo.com/video/123456');
   });
 
+  it('matches Apple Music album (audio shape)', () => {
+    const m = detectEmbed('https://music.apple.com/us/album/folklore/1551278014');
+    expect(m?.provider).toBe('applemusic');
+    expect(m?.src).toBe('https://embed.music.apple.com/us/album/folklore/1551278014');
+    expect(m?.shape).toBe('audio');
+  });
+
+  it('matches Apple Music playlist (playlist shape)', () => {
+    const m = detectEmbed('https://music.apple.com/us/playlist/indie-vibes/pl.u-PmRNqP9TChg');
+    expect(m?.provider).toBe('applemusic');
+    expect(m?.src).toBe('https://embed.music.apple.com/us/playlist/indie-vibes/pl.u-PmRNqP9TChg');
+    expect(m?.shape).toBe('playlist');
+  });
+
+  it('matches Apple Music song (?i= track query retained)', () => {
+    const m = detectEmbed('https://music.apple.com/us/album/folklore/1551278014?i=1551278029');
+    expect(m?.provider).toBe('applemusic');
+    expect(m?.src).toBe('https://embed.music.apple.com/us/album/folklore/1551278014?i=1551278029');
+    expect(m?.shape).toBe('audio');
+  });
+
   it('returns null for unrelated text and non-embed URLs', () => {
     expect(detectEmbed('hello world')).toBeNull();
     expect(detectEmbed('https://example.com/page')).toBeNull();
@@ -49,9 +70,10 @@ describe('rewriteEmbeds', () => {
 
   it('handles multiple embeds in one document', () => {
     const md =
-      'https://youtu.be/dQw4w9WgXcQ\n\nhttps://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT';
+      'https://youtu.be/dQw4w9WgXcQ\n\nhttps://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT\n\nhttps://music.apple.com/us/playlist/indie-vibes/pl.u-PmRNqP9TChg';
     const out = rewriteEmbeds(md);
-    expect((out.match(/<iframe/g) ?? []).length).toBe(2);
+    expect((out.match(/<iframe/g) ?? []).length).toBe(3);
+    expect(out).toContain('class="embed embed--playlist embed--applemusic"');
   });
 });
 
@@ -63,6 +85,8 @@ describe('security envelope', () => {
       'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
       'https://vimeo.com/123456',
+      'https://music.apple.com/us/album/folklore/1551278014',
+      'https://music.apple.com/us/playlist/indie-vibes/pl.u-PmRNqP9TChg',
     ]) {
       const meta = detectEmbed(url);
       expect(meta).not.toBeNull();

@@ -305,10 +305,17 @@ describe('sanitizePostHtml', () => {
     expect(clean).toContain('<p>ok</p>');
   });
 
-  it('keeps iframes from allowed embed hosts (YouTube/Spotify/Vimeo)', () => {
+  it('keeps iframes from allowed embed hosts (YouTube/Spotify/Vimeo/Apple Music)', () => {
     const dirty = `<iframe src="https://www.youtube-nocookie.com/embed/abc"></iframe>`;
     const clean = sanitizePostHtml(dirty);
     expect(clean).toContain('iframe');
     expect(clean).toContain('youtube-nocookie.com');
+  });
+
+  it('keeps Apple Music embed iframes', () => {
+    const dirty = `<iframe src="https://embed.music.apple.com/us/album/folklore/1551278014"></iframe>`;
+    const clean = sanitizePostHtml(dirty);
+    expect(clean).toContain('iframe');
+    expect(clean).toContain('embed.music.apple.com');
   });
 });
