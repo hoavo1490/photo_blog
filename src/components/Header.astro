@@ -5,6 +5,9 @@ const siteName = Astro.locals.tenant?.name ?? defaultSiteName;
 // every other page promotes its own title to <h1> and the header here
 // downgrades to a plain <p> so we don't ship two h1s.
 const isHome = Astro.url.pathname === '/';
+// Section the current page belongs to, e.g. /gallery/trua -> Gallery.
+const path = Astro.url.pathname;
+const isCurrent = (href: string) => path === href || path.startsWith(`${href}/`);
 ---
 <header class="site-header">
   <div class="site-title">
@@ -17,7 +20,7 @@ const isHome = Astro.url.pathname === '/';
   <nav>
     {nav.map((item) => (
       <span>
-        <a title={item.title} href={item.href} aria-label={item.title}>
+        <a title={item.title} href={item.href} aria-label={item.title} aria-current={isCurrent(item.href) ? 'page' : undefined}>
           {item.icon === 'archive' && (
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <line x1="8" y1="6" x2="21" y2="6"></line>

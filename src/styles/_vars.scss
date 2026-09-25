@@ -10,3 +10,13 @@ $monospace: "Fira Mono", monospace;
 $label-font: $font-name, "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 $time-font: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 $background-color: #f9f9f9;
+
+// Type scale for text outside post bodies. Page titles are 1.45em
+// (20.3px) and the brand 1.7em (23.8px), both set on their elements.
+$fs-meta: 12px;       // dates, counts, back links, footer, small labels
+$fs-secondary: 14px;  // excerpts, descriptions, tags, related titles
+$fs-body: 15px;       // post body (post-typography) and item titles in lists
+
+// Vertical rhythm shared by every page.
+$page-top: 28px;      // header -> first line of content
+$header-gap: 20px;    // page header (eyebrow / title / tags) -> content

@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import * as albums from '~/lib/db/albums';
 import { variantKeyForKey, publicUrlForKey } from '~/lib/r2/images';
+import { fmtAlbumMeta } from '~/lib/album-meta';
 
 const tenant = Astro.locals.tenant!;
 const driver = Astro.locals.db!;
@@ -12,7 +13,7 @@ const { slug } = Astro.params;
 const album = await albums.findAlbumBySlug(driver, { siteId: tenant.id, slug: slug! });
 if (!album) return Astro.redirect('/gallery');
 
-function thumbUrl(img: typeof album.images[number]): string {
+function thumbUrl(img: NonNullable<typeof album>["images"][number]): string {
   const variants = img.variantWidths ?? [];
   for (const w of [800, 400, 1200, 1600]) {
     if (variants.includes(w)) return publicUrlForKey(variantKeyForKey(img.r2Key, w), env_);
@@ -24,11 +25,16 @@ function thumbUrl(img: typeof album.images[number]): string {
   <div id="foto-gallery">
     <div class="foto-section" id={album.slug}>
       <div class="foto-section-header">
-        <div class="foto-section-title">{album.title}</div>
-        {album.description && <div class="foto-section-description">{album.description}</div>}
+        <a class="foto-back" href="/gallery">← Gallery</a>
+        <div class="gi-row">
+          <h1 class="gi-title">{album.title}</h1>
+          <span class="gi-sep" aria-hidden="true">·</span>
+          <span class="gi-date">{fmtAlbumMeta(album.images.length, album.createdAt)}</span>
+        </div>
+        {album.description && <p class="foto-section-description">{album.description}</p>}
       </div>
       {album.images.length === 0 ? (
-        <p style="color: #999; padding: 2em 0 4em 4em;">No photos in this album yet.</p>
+        <p class="gi-empty">No photos in this album yet.</p>
       ) : (
         <div class={`section-images section-images-${album.slug}`}>
           {album.images.map(img => (

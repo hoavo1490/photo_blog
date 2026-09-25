@@ -4,5 +4,8 @@ const author = defaultAuthor; // future: derive from tenant settings
 const thisYear = new Date().getUTCFullYear();
 ---
 <footer>
-  <div>&copy; {thisYear} {author}</div>
+  <span>&copy; {thisYear} {author}</span>
+  <nav aria-label="Footer">
+    <a href="/atom.xml" type="application/rss+xml">RSS</a>
+  </nav>
 </footer>

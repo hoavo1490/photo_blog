@@ -29,33 +29,40 @@
 // Out of scope (intentional drift between editor and published):
 // links (`a`), inline `code`, `pre`, and `hr`.
 
+// `& <sel>` for plain SCSS hosts, `:global(<sel>)` inside Astro
+// scoped <style> blocks. Replaces Sass's deprecated `if()` function.
+@function _sel($astro, $sel) {
+  @if $astro { @return ':global(#{$sel})'; }
+  @return '& #{$sel}';
+}
+
 @mixin post-typography($astro: false) {
   // Build descendant selectors once so the rule bodies aren't
   // duplicated across an `@if/@else`. `#{...}` interpolates the
   // selector string at parse time; the result is identical to
   // writing `& p` or `:global(p)` literally.
-  $p:          if($astro, ':global(p)',          '& p');
-  $h1:         if($astro, ':global(h1)',         '& h1');
-  $h2:         if($astro, ':global(h2)',         '& h2');
-  $h3:         if($astro, ':global(h3)',         '& h3');
-  $blockquote: if($astro, ':global(blockquote)', '& blockquote');
-  $ul:         if($astro, ':global(ul)',         '& ul');
-  $ol:         if($astro, ':global(ol)',         '& ol');
-  $li:         if($astro, ':global(li)',         '& li');
-  $img:        if($astro, ':global(img)',        '& img');
-  $picture:    if($astro, ':global(picture)',    '& picture');
-  $embed:      if($astro, ':global(.embed)',     '& .embed');
-  $embedVideo: if($astro, ':global(.embed--video)','& .embed--video');
-  $embedAudio: if($astro, ':global(.embed--audio)','& .embed--audio');
-  $embedPlaylist: if($astro, ':global(.embed--playlist)','& .embed--playlist');
-  $embedIframe:if($astro, ':global(.embed iframe)','& .embed iframe');
+  $p:          _sel($astro, 'p');
+  $h1:         _sel($astro, 'h1');
+  $h2:         _sel($astro, 'h2');
+  $h3:         _sel($astro, 'h3');
+  $blockquote: _sel($astro, 'blockquote');
+  $ul:         _sel($astro, 'ul');
+  $ol:         _sel($astro, 'ol');
+  $li:         _sel($astro, 'li');
+  $img:        _sel($astro, 'img');
+  $picture:    _sel($astro, 'picture');
+  $embed:      _sel($astro, '.embed');
+  $embedVideo: _sel($astro, '.embed--video');
+  $embedAudio: _sel($astro, '.embed--audio');
+  $embedPlaylist: _sel($astro, '.embed--playlist');
+  $embedIframe:_sel($astro, '.embed iframe');
   // Provider-specific audio/list players. Heights match each platform's
   // own native embed so the track list isn't clipped.
-  $embedApple:        if($astro, ':global(.embed--applemusic)','& .embed--applemusic');
-  $embedSpotifyAudio: if($astro, ':global(.embed--spotify.embed--audio)','& .embed--spotify.embed--audio');
-  $embedSpotifyList:  if($astro, ':global(.embed--spotify.embed--playlist)','& .embed--spotify.embed--playlist');
-  $embedAppleAudio:   if($astro, ':global(.embed--applemusic.embed--audio)','& .embed--applemusic.embed--audio');
-  $embedAppleList:    if($astro, ':global(.embed--applemusic.embed--playlist)','& .embed--applemusic.embed--playlist');
+  $embedApple:        _sel($astro, '.embed--applemusic');
+  $embedSpotifyAudio: _sel($astro, '.embed--spotify.embed--audio');
+  $embedSpotifyList:  _sel($astro, '.embed--spotify.embed--playlist');
+  $embedAppleAudio:   _sel($astro, '.embed--applemusic.embed--audio');
+  $embedAppleList:    _sel($astro, '.embed--applemusic.embed--playlist');
 
   // Body text scales below the post title (1.15em on 14px = 16.1px) so
   // the title remains the loudest thing in the column. Body h1 sits

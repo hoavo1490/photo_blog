@@ -112,11 +112,8 @@ pnpm install
 pnpm dev   # workerd on http://localhost:4321
 ```
 
-For local dev:
-- Run a local Neon proxy or use the production DB with a `.dev.vars` file
-- R2 bindings auto-mock under wrangler dev (uses a local filesystem)
-- GitHub OAuth callback for localhost: register a second OAuth App
-  with callback `http://localhost:4321/auth/callback`
+For local dev, seed the local D1 database and set `.dev.vars` as
+described in [README.md → Develop](./README.md#develop).
 
 `pnpm test` runs the 214-test suite (unit + workers + integration).
 PGLite is in-memory; no external DB needed for tests.

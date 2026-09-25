@@ -7,6 +7,8 @@ interface Props {
   post: Post;
   cover: string;
   description?: string | null;
+  /** Topic name, or the first tag when the post has no topic. */
+  label?: string | null;
   /** True for the first above-the-fold card -- emits loading=eager and
    *  fetchpriority=high so the LCP image starts loading immediately
    *  instead of waiting behind lazy-load heuristics. */
@@ -27,7 +29,7 @@ interface Props {
   /** True when matching `.<W>w.avif` variants exist alongside JPEG/WebP. */
   hasAvif?: boolean;
 }
-const { post, cover, description, priority = false, aboveFold = false, variantWidths = [], r2Key, r2Env, hasAvif = false } = Astro.props;
+const { post, cover, description, label, priority = false, aboveFold = false, variantWidths = [], r2Key, r2Env, hasAvif = false } = Astro.props;
 
 // Three loading strategies:
 //   priority (LCP):     eager, sync decode, fetchpriority=high
@@ -37,16 +39,10 @@ const loadingAttr  = priority ? 'eager' : aboveFold ? 'eager' : 'lazy';
 const decodingAttr = priority ? 'sync'  : 'async';
 const fetchAttr   = priority ? 'high'  : aboveFold ? 'auto'  : 'low';
 
-// Sizes attribute matches the homepage grid AND the page-width mixin
-// in styles/global.scss (#content caps at 300/350/400/750px below
-// 320/375/414/800px breakpoints). The container is never 100vw, so
-// promising 100vw made Lighthouse pick the 800w variant when the
-// 400w one would do at DPR 1 -- ~90KB of wasted LCP bytes.
-//
-//   <= 480px : 1 column inside a 400px container → 400px
-//   <= 800px : 2 columns inside a ~400px container → ~200px
-//   else     : 3 columns inside a 750px container with 12px of gaps → ~246px
-const sizesAttr = '(max-width: 480px) 400px, (max-width: 800px) 200px, 250px';
+// Sizes attribute matches the list-row thumbnail width in
+// styles/_cards.scss (.post-row .thumb): 110px on phones, 180px
+// otherwise. Kept in lock-step with index.astro's lcpSizes.
+const sizesAttr = '(max-width: 480px) 110px, 180px';
 
 const jpegSrcset: string[] = [];
 const webpSrcset: string[] = [];
@@ -63,8 +59,13 @@ if (r2Key && r2Env && variantWidths.length > 0) {
 const jpegSrcsetStr = jpegSrcset.length > 0 ? jpegSrcset.join(', ') : undefined;
 const webpSrcsetStr = webpSrcset.length > 0 ? webpSrcset.join(', ') : undefined;
 const avifSrcsetStr = avifSrcset.length > 0 ? avifSrcset.join(', ') : undefined;
+// Full ISO date for machines; the visible label drops the year because
+// every row already sits under its year heading.
+const dateStr = post.publishedAt!.toISOString().slice(0, 10);
+const dateLabel = dateStr.slice(5);
 ---
-<a class="card" href={postUrl({ publishedAt: post.publishedAt!, slug: post.slug })}>
+<a class="post-row" href={postUrl({ publishedAt: post.publishedAt!, slug: post.slug })}>
+  <div class="thumb">
   {webpSrcsetStr ? (
     <picture>
       {avifSrcsetStr && <source type="image/avif" srcset={avifSrcsetStr} sizes={sizesAttr} />}
@@ -73,7 +74,7 @@ const avifSrcsetStr = avifSrcset.length > 0 ? avifSrcset.join(', ') : undefined;
         src={cover}
         srcset={jpegSrcsetStr}
         sizes={jpegSrcsetStr ? sizesAttr : undefined}
-        alt={post.title}
+        alt=""
         loading={loadingAttr}
         decoding={decodingAttr}
         fetchpriority={fetchAttr}
@@ -84,14 +85,18 @@ const avifSrcsetStr = avifSrcset.length > 0 ? avifSrcset.join(', ') : undefined;
       src={cover}
       srcset={jpegSrcsetStr}
       sizes={jpegSrcsetStr ? sizesAttr : undefined}
-      alt={post.title}
+      alt=""
       loading={priority ? 'eager' : 'lazy'}
       decoding={priority ? 'sync' : 'async'}
       fetchpriority={priority ? 'high' : 'auto'}
     />
   )}
-  <div class="overlay">
-    <div class="title">{post.title}</div>
-    <div class="desc">{description ?? post.description ?? ''}</div>
+  </div>
+  <div class="body">
+    <h3 class="title">{post.title}</h3>
+    <div class="meta">
+      <time datetime={dateStr}>{dateLabel}</time>{label && <><span class="sep" aria-hidden="true">·</span><span class="label">{label}</span></>}
+    </div>
+    <p class="desc">{description ?? post.description ?? ''}</p>
   </div>
 </a>

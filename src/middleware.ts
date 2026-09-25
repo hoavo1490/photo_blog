@@ -140,6 +140,10 @@ async function handlePublic(
   tenantId: string,
 ) {
   if (!isCacheableMethod(context.request.method)) return next();
+  // No edge cache or Cache-Control in `astro dev`: the browser would
+  // otherwise keep showing stale pages (max-age + a 1-day
+  // stale-while-revalidate) after every code change.
+  if (import.meta.env.DEV) return next();
 
   const cache = (caches as unknown as { default: Cache }).default;
   const cached = await readFromCache(cache, { request: context.request, tenantId });

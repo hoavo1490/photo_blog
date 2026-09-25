@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import * as albums from '~/lib/db/albums';
 import { variantKeyForKey, publicUrlForKey } from '~/lib/r2/images';
+import { fmtAlbumMeta } from '~/lib/album-meta';
 
 const tenant = Astro.locals.tenant!;
 const driver = Astro.locals.db!;
@@ -30,9 +31,9 @@ function fullUrl(img: { r2Key: string; variantWidths: number[] | null }): string
   return publicUrlForKey(img.r2Key, env_);
 }
 
-function fmtDate(d: Date): string {
-  return `${d.getMonth() + 1} · ${d.getFullYear()}`;
-}
+// Photos shown per album on desktop; the album page has the rest.
+const PREVIEW = 3;
+
 
 // Preload the first visible gallery image (LCP candidate).
 const lcpThumb = all.length > 0 && all[0].images.length > 0
@@ -40,44 +41,81 @@ const lcpThumb = all.length > 0 && all[0].images.length > 0
   : undefined;
 ---
 <BaseLayout title="Gallery" lcpImage={lcpThumb ? { src: lcpThumb } : undefined}>
-  <div class="gi">
+  <article class="gi">
+    <section class="title"><h1>gallery</h1></section>
     {all.length === 0 ? (
       <p class="gi-empty">No albums yet.</p>
     ) : all.map((album, albumIdx) => (
       <div class="gi-album">
         <div class="gi-row">
-          <span class="gi-title">{album.title}</span>
-          <span class="gi-date">{fmtDate(album.createdAt)}</span>
+          <h2 class="gi-title"><a href={`/gallery/${album.slug}`}>{album.title}</a></h2>
+          <span class="gi-sep" aria-hidden="true">·</span>
+          <span class="gi-date">{fmtAlbumMeta(album.images.length, album.createdAt)}</span>
         </div>
+        {album.description && <p class="gi-desc">{album.description}</p>}
         {album.images.length > 0 && (
           <div class="gi-masonry">
+            {/* Preview: first PREVIEW tiles on desktop, first tile only
+                at <=800px (CSS hides the rest). The last visible tile
+                carries a "+N more" overlay linking to the album; each
+                breakpoint has its own overlay because N differs. The
+                remaining photos are emitted as image-less anchors so the
+                lightbox still pages through the whole album. */}
             {album.images.map((img, imgIdx) => {
               const isLcp = albumIdx === 0 && imgIdx === 0;
-              return (
-                <a
-                  href={fullUrl(img)}
-                  data-pswp-src={fullUrl(img)}
-                  data-pswp-width={img.width}
-                  data-pswp-height={img.height}
-                  aria-label={img.caption ?? `Photo ${imgIdx + 1}`}
-                >
-                  <img
-                    src={thumbUrl(img)}
-                    alt={img.caption ?? ''}
-                    loading={isLcp ? 'eager' : 'lazy'}
-                    decoding={isLcp ? 'sync' : 'async'}
-                    fetchpriority={isLcp ? 'high' : 'auto'}
-                    width={img.width}
-                    height={img.height}
+              const total = album.images.length;
+              if (imgIdx >= PREVIEW) {
+                return (
+                  <a
+                    class="gi-rest"
+                    href={fullUrl(img)}
+                    data-pswp-src={fullUrl(img)}
+                    data-pswp-width={img.width}
+                    data-pswp-height={img.height}
+                    aria-hidden="true"
+                    tabindex="-1"
                   />
-                </a>
+                );
+              }
+              const moreDesktop = imgIdx === PREVIEW - 1 && total > PREVIEW ? total - PREVIEW : 0;
+              const moreMobile = imgIdx === 0 && total > 1 ? total - 1 : 0;
+              return (
+                <div class="gi-tile">
+                  <a
+                    href={fullUrl(img)}
+                    data-pswp-src={fullUrl(img)}
+                    data-pswp-width={img.width}
+                    data-pswp-height={img.height}
+                    aria-label={img.caption ?? `Photo ${imgIdx + 1}`}
+                  >
+                    <img
+                      src={thumbUrl(img)}
+                      alt={img.caption ?? ''}
+                      loading={isLcp ? 'eager' : 'lazy'}
+                      decoding={isLcp ? 'sync' : 'async'}
+                      fetchpriority={isLcp ? 'high' : 'auto'}
+                      width={img.width}
+                      height={img.height}
+                    />
+                  </a>
+                  {moreDesktop > 0 && (
+                    <a class="gi-more gi-more--desktop" href={`/gallery/${album.slug}`} aria-label={`View all ${total} photos in ${album.title}`}>
+                      <span>+{moreDesktop} more</span>
+                    </a>
+                  )}
+                  {moreMobile > 0 && (
+                    <a class="gi-more gi-more--mobile" href={`/gallery/${album.slug}`} aria-label={`View all ${total} photos in ${album.title}`}>
+                      <span>+{moreMobile} more</span>
+                    </a>
+                  )}
+                </div>
               );
             })}
           </div>
         )}
       </div>
     ))}
-  </div>
+  </article>
 </BaseLayout>
 
 <script>

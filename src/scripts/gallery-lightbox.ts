@@ -12,9 +12,11 @@ export function initGallery(): void {
     if (section.dataset.galleryInited === '1') return;
     section.dataset.galleryInited = '1';
     new JustifiedGrid(section, {
-      gap: 8,
+      // 6px matches the gallery index. Row height is capped so a single
+      // wide photo can't make a row taller than the viewport.
+      gap: 6,
       columnRange: [1, 4],
-      sizeRange: [200, Infinity],
+      sizeRange: [180, 360],
       useResizeObserver: true,
       observeChildren: false,
     }).renderItems();

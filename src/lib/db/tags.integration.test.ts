@@ -145,3 +145,39 @@ describe('tags.findBySlug', () => {
     expect(await tags.findBySlug(driver, { siteId, slug: 'nope' })).toBeNull();
   });
 });
+
+describe('tags.listNamesForPosts', () => {
+  it('returns each post\'s tag names ordered by slug, in one map', async () => {
+    const a = await posts.createDraft(driver, { siteId, slug: 'a', title: 'A', body: '' });
+    const b = await posts.createDraft(driver, { siteId, slug: 'b', title: 'B', body: '' });
+    const c = await posts.createDraft(driver, { siteId, slug: 'c', title: 'C', body: '' });
+    await tags.setPostTags(driver, { siteId, postId: a.id, tagNames: ['Travel', 'Film'] });
+    await tags.setPostTags(driver, { siteId, postId: b.id, tagNames: ['Music'] });
+
+    const m = await tags.listNamesForPosts(driver, { siteId, postIds: [a.id, b.id, c.id] });
+    expect(m.get(a.id)).toEqual(['Film', 'Travel']);
+    expect(m.get(b.id)).toEqual(['Music']);
+    expect(m.has(c.id)).toBe(false);
+  });
+
+  it('returns an empty map for no posts without querying', async () => {
+    const m = await tags.listNamesForPosts(driver, { siteId, postIds: [] });
+    expect(m.size).toBe(0);
+  });
+
+  it('handles more post ids than one statement can bind (D1 caps at 100)', async () => {
+    const p = await posts.createDraft(driver, { siteId, slug: 'real', title: 'R', body: '' });
+    await tags.setPostTags(driver, { siteId, postId: p.id, tagNames: ['leica'] });
+    const filler = Array.from({ length: 150 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+    const m = await tags.listNamesForPosts(driver, { siteId, postIds: [...filler, p.id] });
+    expect(m.get(p.id)).toEqual(['leica']);
+  });
+
+  it('does not leak tags across sites', async () => {
+    const s2 = await sites.create(driver, { slug: 'b2', name: 'B2' });
+    const p = await posts.createDraft(driver, { siteId: s2.id, slug: 'x', title: 'X', body: '' });
+    await tags.setPostTags(driver, { siteId: s2.id, postId: p.id, tagNames: ['secret'] });
+    const m = await tags.listNamesForPosts(driver, { siteId, postIds: [p.id] });
+    expect(m.size).toBe(0);
+  });
+});

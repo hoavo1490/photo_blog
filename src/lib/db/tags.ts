@@ -81,6 +81,36 @@ export async function listForPost(
   return rows.map(fromRow);
 }
 
+/** Tag names for many posts in one query, keyed by post id and ordered
+ *  by slug. Posts with no tags are absent from the map. Used by list
+ *  views that would otherwise call listForPost once per row. */
+export async function listNamesForPosts(
+  driver: SqlDriver,
+  args: { siteId: string; postIds: string[] },
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  // D1 caps bound parameters at 100 per statement; chunk to stay under.
+  const CHUNK = 90;
+  for (let i = 0; i < args.postIds.length; i += CHUNK) {
+    const ids = args.postIds.slice(i, i + CHUNK);
+    const placeholders = ids.map((_, j) => `$${j + 2}`).join(',');
+    const rows = await driver.query<{ post_id: string; name: string }>(
+      `SELECT pt.post_id, t.name
+       FROM post_tags pt
+       JOIN tags t ON t.id = pt.tag_id
+       WHERE t.site_id = $1 AND pt.post_id IN (${placeholders})
+       ORDER BY pt.post_id, t.slug`,
+      [args.siteId, ...ids],
+    );
+    for (const r of rows) {
+      const list = out.get(r.post_id) ?? [];
+      list.push(r.name);
+      out.set(r.post_id, list);
+    }
+  }
+  return out;
+}
+
 export async function listForSite(
   driver: SqlDriver,
   args: { siteId: string },

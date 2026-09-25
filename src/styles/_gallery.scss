@@ -17,33 +17,93 @@
   margin-bottom: 2em;
 }
 
+// Title · count · date on one line, like the homepage row meta, so an
+// album's details stay together instead of splitting across the page.
 .gi-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 12px;
+  column-gap: 0.5em;
   margin-bottom: 0.5em;
 }
 
-.gi-title {
-  font-family: #{$label-font};
-  font-size: 1em;
-  font-weight: 600;
-  letter-spacing: 0.05em;
+.gi-sep {
+  font-family: #{$time-font};
+  font-size: $fs-meta;
   color: #6e6e6e;
-  text-decoration: none;
+}
 
-  &:hover { color: #dd1144; }
+// One line of the album description; the album page shows it in full.
+.gi-desc {
+  margin: -0.25em 0 0.5em;
+  font-size: $fs-secondary;
+  line-height: 1.55;
+  color: #555;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Album name: content, not a section label, so it matches the homepage
+// post titles (#222) rather than the muted year headings.
+.gi-title {
+  margin: 0;
+  font-family: #{$label-font};
+  font-size: $fs-body;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #222;
+
+  a {
+    color: inherit;
+    &:hover { color: #dd1144; }
+  }
 }
 
 .gi-date {
   font-family: #{$time-font};
-  font-size: 11px;
-  color: #666;
-  margin-left: auto;
+  font-size: $fs-meta;
+  line-height: 1.4;
+  color: #6e6e6e;
   white-space: nowrap;
 }
 
+// Gallery index heading, same as archive / tags / topics.
+.gi > .title { margin-bottom: $header-gap; }
+
+// ── Album page header ───────────────────────────────────────────────────────
+.foto-section-header {
+  margin-bottom: $header-gap;
+
+  .gi-row { margin-bottom: 0; }
+  // Page-level heading: same size as post titles (.post-head h1).
+  h1.gi-title { font-size: 1.45em; }
+}
+
+.foto-back {
+  // Block, not inline-block: an inline box inherits #content's 28px line
+  // and adds 7px of phantom space above the link.
+  display: block;
+  width: fit-content;
+  margin-bottom: 6px;
+  font-family: #{$time-font};
+  font-size: $fs-meta;
+  line-height: 1.4;
+  color: #6e6e6e;
+  &:hover { color: #dd1144; }
+}
+
+.foto-section-description {
+  margin: 0.4em 0 0;
+  font-size: $fs-secondary;
+  line-height: 1.55;
+  color: #555;
+}
+
 // ── Photo grid ───────────────────────────────────────────────────────────────
+// Album preview: up to 3 tiles on desktop, 1 at <=800px. Tiles past the
+// preview are rendered as image-less `.gi-rest` anchors purely so the
+// lightbox covers the whole album; they never take up grid space.
 .gi-masonry {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -53,6 +113,8 @@
     display: block;
     overflow: hidden;
   }
+
+  .gi-rest { display: none; }
 
   img {
     width: 100%;
@@ -66,16 +128,61 @@
   a:hover img { transform: scale(1.04); }
 }
 
+.gi-tile {
+  position: relative;
+  overflow: hidden;
+}
+
+// "+N more" on the last visible tile: a transparent link covering the
+// tile (click anywhere opens the album) with the count as a corner
+// badge, so the photo underneath stays visible. Desktop puts it on the
+// 3rd tile, <=800px on the 1st. Qualified with .gi-masonry so it
+// outranks `.gi-masonry a { display: block }`.
+.gi-masonry .gi-more {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 10px;
+  color: #fff;
+  font-family: #{$label-font};
+  font-size: $fs-meta;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  cursor: pointer;
+
+  span {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.6);
+    transition: background 0.2s ease;
+  }
+
+  &:hover { color: #fff; span { background: rgba(0, 0, 0, 0.8); } }
+
+  &:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: -4px;
+  }
+}
+
+.gi-masonry .gi-more--mobile { display: none; }
+
+// Tiles without the badge open the lightbox.
+.gi-masonry a[data-pswp-src] { cursor: zoom-in; }
+
+// Album page photos open in the lightbox.
+.section-images a[data-pswp-src] { cursor: zoom-in; }
+
 
 // ── Responsive ───────────────────────────────────────────────────────────────
 @include max-screen(800px) {
   .gi-masonry {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@include max-screen(480px) {
-  .gi-masonry {
     grid-template-columns: 1fr;
   }
+  .gi-tile + .gi-tile { display: none; }
+  .gi-masonry .gi-more--desktop { display: none; }
+  .gi-masonry .gi-more--mobile { display: flex; }
 }

@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import BaseLayout from './BaseLayout.astro';
 import { coverUrlFor, buildBodyImageResolver, batchCoverImagesFor } from '../lib/render';
 import * as tagsRepo from '../lib/db/tags';
+import * as topicsRepo from '../lib/db/topics';
 import * as postsRepo from '../lib/db/posts';
 import { firstParagraph, firstBodyImageInfo, rewriteImageTokens, renderPostHtml } from '../lib/markdown';
 import { rewriteEmbeds } from '../lib/embeds';
@@ -23,12 +24,13 @@ const env_ = env as unknown as { R2_PUBLIC_BASE?: string; R2_DEV_BASE?: string }
 // stacking three RTTs to Neon (~50ms each) before render could begin.
 // All three queries only need the post + tenant we already have, so
 // nothing depends on the previous one's result.
-const [bodyResolver, cover, postTags, adjacent, related] = await Promise.all([
+const [bodyResolver, cover, postTags, adjacent, related, topic] = await Promise.all([
   buildBodyImageResolver(driver, post, env_),
   coverUrlFor(driver, post, env_),
   tagsRepo.listForPost(driver, { siteId: tenant.id, postId: post.id }),
   postsRepo.findAdjacent(driver, { siteId: tenant.id, post }),
   postsRepo.findRelatedByTags(driver, { siteId: tenant.id, postId: post.id, limit: 4 }),
+  post.topicId ? topicsRepo.findById(driver, { siteId: tenant.id, id: post.topicId }) : Promise.resolve(null),
 ]);
 const relatedCovers = related.length
   ? await batchCoverImagesFor(driver, tenant.id, related, env_)
@@ -101,10 +103,12 @@ const jsonLd = asGraph([blogPosting, breadcrumb]);
         BreadcrumbList JSON-LD so Google still gets the rich-result
         signal for SERP breadcrumb display -- only the visible trail
         was dropped. */}
-    {dateStr && (
-      <p class="eyebrow"><time datetime={dateStr}>{dateStr}</time></p>
+    {(dateStr || topic) && (
+      <p class="eyebrow">
+        {dateStr && <time datetime={dateStr}>{dateStr}</time>}{dateStr && topic && <span class="sep" aria-hidden="true">·</span>}{topic && <a href={`/topics/${topic.slug}`}>{topic.name}</a>}
+      </p>
     )}
-    <section class="title"><h1>{post.title}</h1></section>
+    <section class="title post-head"><h1>{post.title}</h1></section>
     {postTags.length > 0 && (
       <p class="meta">
         <span class="tags">

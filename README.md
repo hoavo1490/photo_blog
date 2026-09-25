@@ -9,12 +9,30 @@ See [DEPLOY.md](./DEPLOY.md) for first-time setup (Neon + R2 + GitHub OAuth + Cl
 ```bash
 pnpm install
 pnpm dev            # workerd on http://localhost:4321
-pnpm test           # 214 tests (unit + DB integration + R2 Miniflare)
+pnpm test           # unit + DB integration + R2 Miniflare
 pnpm typecheck      # astro check + tsc --noEmit
 pnpm build          # production build to dist/
 ```
 
-`pnpm dev` runs against real workerd via the `@astrojs/cloudflare` adapter v13. Local DB needs `DATABASE_URL` in `.dev.vars` pointing at either a Neon branch or a local Postgres. Tests use in-process PGLite (no external DB or Docker needed).
+`pnpm dev` runs against real workerd via the `@astrojs/cloudflare` adapter v13, with a local D1 database (binding `DB`) stored under `.wrangler/`. It starts empty -- seed it once with the schema and the data snapshot:
+
+```bash
+./node_modules/.bin/wrangler d1 execute photoblog --local --file=migrations/d1/schema.sql
+./node_modules/.bin/wrangler d1 execute photoblog --local --file=migrations/d1/data.sql
+```
+
+`--local` never touches production. Re-run only after deleting `.wrangler/`.
+
+`.dev.vars` settings for local dev:
+
+- `LOCAL_SITE_SLUG=rio` -- makes `localhost` resolve to that site
+- `DEV_BYPASS_LOGIN=<githubLogin>` -- skips GitHub OAuth for `/admin`
+- `R2_DEV_BASE` -- public R2 origin; cover images load from production R2, so they need a network connection
+
+Notes:
+
+- `data.sql` is a point-in-time snapshot; posts published since then won't appear locally.
+- Anonymous GETs are edge-cached for 5 minutes, even in dev. Add a query string (`/?x=1`) to see a fresh render.
 
 ## Stack
 
